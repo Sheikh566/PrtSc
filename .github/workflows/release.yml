@@ -1,0 +1,221 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# One release at a time: the appcast and the tap are shared, mutable state.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the GitHub Release and push the gh-pages branch
+
+jobs:
+  release:
+    runs-on: macos-26 # keep in sync with ci.yml (needs Xcode 27)
+    timeout-minutes: 90
+    env:
+      # Optional secrets. Each feature turns on automatically when its secrets exist.
+      HAS_SIGNING: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' && secrets.DEVELOPER_ID_CERT_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+      HAS_NOTARY: ${{ (secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '') || (secrets.APPLE_ID != '' && secrets.APPLE_APP_PASSWORD != '') }}
+      HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      BUILD_DIR: ${{ github.workspace }}/build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag '$tag' is not of the form vX.Y.Z or vX.Y.Z-suffix"
+            exit 1
+          fi
+          version="${tag#v}"
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "build=${GITHUB_RUN_NUMBER}"
+            echo "dmg=PrtSc-$version.dmg"
+            if [[ "$version" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode 27
+        run: scripts/select-xcode.sh 27
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/DerivedData/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved', '**/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Test PrtScCore
+        working-directory: Packages/PrtScCore
+        run: swift test
+
+      - name: Archive Release build
+        run: scripts/build-app.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" dist
+
+      - name: Import Developer ID certificate
+        id: cert
+        if: env.HAS_SIGNING == 'true'
+        env:
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: scripts/import-cert.sh "$RUNNER_TEMP/signing.keychain-db"
+
+      - name: Sign app (Developer ID, hardened runtime, timestamp)
+        if: env.HAS_SIGNING == 'true'
+        run: scripts/sign-app.sh dist/PrtSc.app "${{ steps.cert.outputs.identity }}"
+
+      - name: Sign app (ad-hoc)
+        if: env.HAS_SIGNING != 'true'
+        run: |
+          echo "::warning::No Developer ID secrets: producing an UNSIGNED (ad-hoc signed) build"
+          scripts/sign-app.sh dist/PrtSc.app -
+
+      - name: Notarize and staple app
+        id: notarize
+        if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          scripts/notarize.sh dist/PrtSc.app
+          echo "done=true" >> "$GITHUB_OUTPUT"
+
+      - name: Warn about missing notarization credentials
+        if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY != 'true'
+        run: |
+          echo "::warning::Signed with Developer ID but no notarization credentials were found; the build is NOT notarized"
+
+      - name: Build dmg
+        run: scripts/make-dmg.sh dist/PrtSc.app "dist/${{ steps.version.outputs.dmg }}" PrtSc
+
+      - name: Sign and notarize dmg
+        if: env.HAS_SIGNING == 'true'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg="dist/${{ steps.version.outputs.dmg }}"
+          codesign --force --timestamp --sign "${{ steps.cert.outputs.identity }}" "$dmg"
+          if [[ "$HAS_NOTARY" == "true" ]]; then
+            scripts/notarize.sh "$dmg"
+          fi
+
+      - name: Remove temporary keychain
+        if: always() && env.HAS_SIGNING == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+
+      - name: Sign dmg for Sparkle
+        id: sparkle
+        if: env.HAS_SPARKLE_KEY == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          # Prints ED_SIGNATURE=... and LENGTH=...; both are safe to export.
+          scripts/sparkle-sign.sh "dist/${{ steps.version.outputs.dmg }}" >> "$GITHUB_OUTPUT"
+
+      - name: Warn about missing Sparkle key
+        if: env.HAS_SPARKLE_KEY != 'true'
+        run: |
+          echo "::warning::SPARKLE_ED_PRIVATE_KEY is not set: skipping Sparkle signing and the appcast update, so installed apps will not see this release"
+
+      - name: Compose release notes
+        run: |
+          {
+            if [[ "$HAS_SIGNING" == "true" && "$HAS_NOTARY" == "true" ]]; then
+              echo "Signed with Developer ID and notarized by Apple."
+            else
+              echo "**Unsigned build** (not notarized by Apple): on first launch, right-click PrtSc.app and choose Open, or approve it in System Settings > Privacy & Security."
+              echo "The Homebrew cask (\`brew install --cask sheikh566/tap/prtsc\`) removes the quarantine flag for you."
+            fi
+            echo
+          } > "$RUNNER_TEMP/notes.md"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=()
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then args+=(--prerelease); fi
+          gh release create "${{ steps.version.outputs.tag }}" "dist/${{ steps.version.outputs.dmg }}" \
+            --title "PrtSc ${{ steps.version.outputs.version }}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes \
+            --verify-tag \
+            "${args[@]}"
+
+      - name: Update Sparkle appcast (gh-pages)
+        # Pre-releases are not offered to existing installs.
+        if: env.HAS_SPARKLE_KEY == 'true' && steps.version.outputs.prerelease != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$remote" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$remote" pages
+          else
+            mkdir pages
+            git -C pages init -q -b gh-pages
+            git -C pages remote add origin "$remote"
+          fi
+          scripts/update-appcast.sh \
+            --appcast pages/appcast.xml \
+            --version "${{ steps.version.outputs.version }}" \
+            --build "${{ steps.version.outputs.build }}" \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.version.outputs.tag }}/${{ steps.version.outputs.dmg }}" \
+            --signature "${{ steps.sparkle.outputs.ED_SIGNATURE }}" \
+            --length "${{ steps.sparkle.outputs.LENGTH }}"
+          touch pages/.nojekyll
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml .nojekyll
+          git commit -m "Appcast: PrtSc ${{ steps.version.outputs.version }}"
+          git push origin HEAD:gh-pages
+
+      - name: Update Homebrew cask
+        if: env.HAS_TAP_TOKEN == 'true' && steps.version.outputs.prerelease != 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Sheikh566/homebrew-tap.git" tap
+          extra=()
+          if [[ "$HAS_SIGNING" != "true" || "$HAS_NOTARY" != "true" ]]; then extra+=(--unsigned); fi
+          scripts/bump-cask.sh \
+            --version "${{ steps.version.outputs.version }}" \
+            --dmg "dist/${{ steps.version.outputs.dmg }}" \
+            --out tap/Casks/prtsc.rb \
+            "${extra[@]}"
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/prtsc.rb
+          if git diff --cached --quiet; then
+            echo "Cask already up to date"
+          else
+            git commit -m "prtsc ${{ steps.version.outputs.version }}"
+            git push origin HEAD
+          fi
+
+      - name: Warn about missing tap token
+        if: env.HAS_TAP_TOKEN != 'true'
+        run: |
+          echo "::warning::HOMEBREW_TAP_TOKEN is not set: skipping the Homebrew cask update"

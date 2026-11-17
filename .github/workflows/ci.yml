@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripts:
+    name: Lint release scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: shellcheck --severity=warning scripts/*.sh
+
+  build-and-test:
+    name: Test and build
+    # Needs a runner image that ships Xcode 27 (the project is Swift 6 / macOS 26+ SDK).
+    # Bump the label here and in release.yml when a newer macOS image with Xcode 27 appears.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27
+        run: scripts/select-xcode.sh 27
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/DerivedData/SourcePackages
+            Packages/PrtScCore/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved', '**/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Release script self-test
+        run: scripts/selftest.sh
+
+      - name: Test PrtScCore
+        working-directory: Packages/PrtScCore
+        run: swift test
+
+      - name: Build app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PrtSc.xcodeproj \
+            -scheme PrtSc \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO

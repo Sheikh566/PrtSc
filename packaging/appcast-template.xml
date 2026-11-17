@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sparkle 2 appcast skeleton. scripts/update-appcast.sh inserts one item element right after the
+  PRTSC-ITEMS marker for every release (newest first) and keeps the marker in place.
+  Published at https://sheikh566.github.io/PrtSc/appcast.xml (gh-pages branch).
+-->
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>PrtSc</title>
+    <link>https://sheikh566.github.io/PrtSc/appcast.xml</link>
+    <description>Most recent PrtSc releases.</description>
+    <language>en</language>
+    <!-- PRTSC-ITEMS -->
+  </channel>
+</rss>
