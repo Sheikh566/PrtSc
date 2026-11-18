@@ -1,6 +1,6 @@
 # PrtSc architecture
 
-This is the build contract shared by everyone working on the code. Read it together with [CONTEXT.md](../CONTEXT.md) for vocabulary and [ADR 0001](adr/0001-copy-gnome-shell-screenshot-ui-not-gnome-screenshot-app.md) for scope. **Use the glossary terms in code** (`ScreenshotUI`, `CapturePanel`, `CaptureMode`, `Selection`, `FrozenFrame`, `WindowPicker`, `InstantCapture`, `SaveFolder`, `CaptureNotification`).
+This is the build contract shared by everyone working on the code. Read it together with [CONTEXT.md](../CONTEXT.md) for vocabulary and [ADR 0001](adr/0001-copy-gnome-shell-screenshot-ui-not-gnome-screenshot-app.md) for scope. **Use the glossary terms in code** (`ScreenshotUI`, `CapturePanel`, `CaptureMode`, `Selection`, `FrozenFrame`, `WindowPicker`, `InstantCapture`, `SaveFolder`, `CaptureNotification`, `CaptureType`, `Screencast`, `ScreencastFolder`, `RecordingIndicator`).
 
 ## Platform
 
@@ -22,8 +22,8 @@ PrtSc/                        app target (AppKit + SwiftUI)
   Settings/                   SettingsStore, SessionState, SettingsView, SettingsWindowController
   Onboarding/                 WelcomeWindowController + view
   Permissions/                PermissionsService
-  Output/                     OutputService (save, clipboard, sound, CaptureNotification)
-  Capture/                    ScreenCapturer, FrozenFrame, InstantCaptureService
+  Output/                     OutputService (save, clipboard, sound, CaptureNotification), ScreencastFolder
+  Capture/                    ScreenCapturer, FrozenFrame, InstantCaptureService, ScreencastRecorder
   ScreenshotUI/               ScreenshotUIController, overlay windows/views, CapturePanelView, WindowPickerView
   Resources/                  Assets.xcassets, Localizable.xcstrings, Info.plist, PrtSc.entitlements
 Packages/PrtScCore/           local Swift package: UI-free logic, tested with Swift Testing
@@ -86,13 +86,23 @@ public struct SelectionEditor: Equatable, Sendable {
     public mutating func dragEnded(at point: CGPoint)
 }
 
+// CaptureType.swift
+public enum CaptureType: String, CaseIterable, Sendable, Codable {
+    case screenshot, screencast
+    public var toggled: CaptureType
+    /// V (case-insensitive) → the type to switch to from `current` (`current.toggled`). nil otherwise.
+    public static func forKey(_ character: Character, from current: CaptureType) -> CaptureType?
+}
+
 // FilenameBuilder.swift
 public enum FilenameBuilder {
     /// "Screenshot from 2026-11-17 23-12-04" (lowercase "from", 24-hour clock, local time zone by default).
-    public static func baseName(for date: Date, timeZone: TimeZone = .current) -> String
+    /// `prefix` replaces "Screenshot" ("Screencast from …").
+    public static func baseName(for date: Date, prefix: String = "Screenshot",
+                                timeZone: TimeZone = .current) -> String
     /// First of "<base>.png", "<base>-1.png", "<base>-2.png", … for which fileExists returns false.
-    public static func uniqueURL(in folder: URL, date: Date, pathExtension: String = "png",
-                                 timeZone: TimeZone = .current,
+    public static func uniqueURL(in folder: URL, date: Date, prefix: String = "Screenshot",
+                                 pathExtension: String = "png", timeZone: TimeZone = .current,
                                  fileExists: (URL) -> Bool) -> URL
 }
 
@@ -101,6 +111,35 @@ public enum SaveFolderResolver {
     /// configured (with ~ expanded) if set, else <home>/Pictures/Screenshots; if <home>/Pictures does not
     /// exist and nothing is configured, <home>. Does not touch the disk except via `directoryExists`.
     public static func resolve(configured: String?, home: URL, directoryExists: (URL) -> Bool) -> URL
+}
+
+// ScreencastFolderResolver.swift
+public enum ScreencastFolderResolver {
+    /// configured (with ~ expanded) if set, else <home>/Movies/Screencasts (also when it doesn't exist yet,
+    /// as long as <home>/Movies does); if neither exists and nothing is configured, <home>. Blank counts as
+    /// unconfigured. Does not touch the disk except via `directoryExists`.
+    public static func resolve(configured: String?, home: URL, directoryExists: (URL) -> Bool) -> URL
+}
+
+// RecordingClock.swift
+public enum RecordingClock {
+    /// "m:ss" under an hour, "h:mm:ss" from one hour on; whole seconds, rounded down.
+    /// Negative, NaN and infinite → "0:00".
+    public static func format(elapsed: TimeInterval) -> String
+}
+
+// RecordingGeometry.swift — Screencast sizes. Video encoders need even dimensions.
+public struct RecordingRegion: Equatable, Sendable {
+    public var sourceRect: CGRect     // SCStreamConfiguration.sourceRect: display-local points, pixel-aligned
+    public var pixelWidth: Int        // even; exactly sourceRect.size × scale, so nothing is resampled
+    public var pixelHeight: Int
+}
+public enum RecordingGeometry {
+    /// size × scale as even pixel dimensions, rounded down, at least 2. A bad scale counts as 1.
+    public static func pixelSize(for size: CGSize, scale: CGFloat) -> (width: Int, height: Int)
+    /// The part of a global CG selection on `display` (a Selection spanning displays is clamped to it):
+    /// edges snapped to the pixel grid, even size, kept inside the display. nil if they don't intersect.
+    public static func region(for selection: CGRect, on display: DisplayInfo) -> RecordingRegion?
 }
 
 // WindowInfo.swift
@@ -209,11 +248,13 @@ public struct KeyCombo: Codable, Hashable, Sendable {
     public var displayString: String  // Apple modifier order ⌃⌥⇧⌘ then the key, e.g. "⌃⇧⌘2", "F13"
 }
 public enum HotkeyAction: String, CaseIterable, Codable, Sendable {
-    case openScreenshotUI, instantScreen, instantWindow
+    case openScreenshotUI, instantScreen, instantWindow, screencast
 }
 public struct HotkeyBindings: Codable, Equatable, Sendable {
     public var bindings: [HotkeyAction: KeyCombo]
-    /// ⇧⌘2 / ⌃⇧⌘2 / ⌥⇧⌘2  (kVK_ANSI_2 = 0x13)
+    /// ⇧⌘2 / ⌃⇧⌘2 / ⌥⇧⌘2  (kVK_ANSI_2 = 0x13), ⌥⇧⌘R for .screencast (kVK_ANSI_R = 0x0F).
+    /// Decoding stored bindings that lack `.screencast` (written before it existed) gives it its default;
+    /// a user who cleared it is stored as an explicit `null` and stays cleared.
     public static let defaults: HotkeyBindings
     /// Fixed Print-key aliases (PC keyboards send F13, kVK_F13 = 0x69):
     /// F13 → openScreenshotUI, ⇧F13 → instantScreen, ⌥F13 → instantWindow.
@@ -274,18 +315,26 @@ struct CapturedImage: Sendable { let image: CGImage; let scale: CGFloat }
 //   Deliveries run strictly one at a time in request order (SerialTaskQueue), so the newest capture is
 //   the last to reach the clipboard. The TIFF is sized in points (ImageEncoding.tiffData: pixels / scale)
 //   so Retina captures paste at their natural size.
+//   deliverScreencast(_ url: URL): for a finished Screencast: only the Capture Notification (no clipboard, no
+//   sound); the recorder has already added the file to recent documents. screencastFolderURL.
 
 // Settings/SettingsStore.swift  (@Observable, UserDefaults-backed)
-//   saveFolderPath: String?   includeWindowShadow: Bool = false   launchAtLogin: Bool = true (SMAppService.mainApp)
+//   saveFolderPath: String?   screencastFolderPath: String?   includeWindowShadow: Bool = false   launchAtLogin: Bool = true (SMAppService.mainApp)
 //   hideMenuBarIcon: Bool = false   hotkeys: HotkeyBindings = .defaults   (automatic updates live in Sparkle's own defaults)
+//   recordSystemAudio: Bool = false   recordMicrophone: Bool = false   screencastPreferH264: Bool = false
 // Settings/SessionState.swift (@Observable, not persisted)
 //   showPointer: Bool = false   rememberedSelection: CGRect?   lastCaptureMode: CaptureMode = .selection
+//   lastCaptureType: CaptureType = .screenshot
 
 // ScreenshotUI/ScreenshotUIController.swift
 //   init(capturer: ScreenCapturer, output: CaptureSink, settings: SettingsStore, session: SessionState)
-//   var isPresented: Bool;  func toggle()  (⇧⌘2 while open, or while still opening, closes/cancels it);
+//   var isPresented: Bool;  func toggle(captureType: CaptureType? = nil)  (⇧⌘2 while open, or while still
+//   opening, closes/cancels it; a non-nil type opens in that Capture Type for this opening only, nil uses
+//   SessionState.lastCaptureType; while open in the *other* type it switches instead of closing);
 //   func dismiss()  (also cancels an opening in progress)
 //   var onFailure: (@MainActor (Error) -> Void)?  — freezing the screen failed, or macOS didn't activate PrtSc
+//   var onRecord: (@MainActor (ScreencastTarget, _ showsPointer: Bool) -> Void)?  — the record button (Screencast
+//     mode): called AFTER the overlay has been closed; the owner starts the ScreencastRecorder.
 //   Opening is a session with a generation token: freeze → activate PrtSc and wait (≤ 1 s) for
 //   NSApp.isActive → present. Any step after an await checks the token, so a dismissed, cancelled or
 //   display-changed (didChangeScreenParameters is observed from the start) session never presents.
@@ -297,6 +346,14 @@ struct CapturedImage: Sendable { let image: CGImage; let scale: CGFloat }
 //   var onFailure: (@MainActor (Error) -> Void)? — AppCoordinator sets it (and the Screenshot UI's) to
 //   `handleCaptureFailure`: beep, then the Welcome window if Screen Recording is missing, else an NSAlert.
 
+// Capture/ScreencastRecorder.swift  (@MainActor @Observable) — see "Screencast" below.
+//   enum ScreencastTarget { selection(rect:display:), display(id:), window(id:) }
+//   struct ScreencastOptions { folder, showsPointer, recordSystemAudio, recordMicrophone, preferH264 }
+//   state: idle | starting | recording(startDate:) | stopping;  isRecording, isBusy
+//   func start(target:options:) async throws;  func stop() async;  func stopAndWaitUntilIdle() async
+//   var onFinished: (@MainActor (URL) -> Void)?;  var onFailure: (@MainActor (Error) -> Void)?
+//   (ScreencastError.interrupted carries `savedFile` when a playable part was kept.)
+
 // Hotkeys/HotkeyManager.swift
 //   func register(_ bindings: HotkeyBindings, handler: @escaping @MainActor (HotkeyAction) -> Void)
 //   Registers bindings + HotkeyBindings.printKeyAliases. Re-register when settings change.
@@ -306,11 +363,14 @@ struct CapturedImage: Sendable { let image: CGImage; let scale: CGFloat }
 //   func openScreenRecordingSettings(); notification authorization status / request / open settings.
 
 // MenuBar/MenuBarController.swift — NSStatusItem with the menu:
-//   Take Screenshot… (⇧⌘2) · Capture Screen (⌃⇧⌘2) · Capture Window (⌥⇧⌘2) · ─ · Open Save Folder ·
+//   Take Screenshot… (⇧⌘2) · Capture Screen (⌃⇧⌘2) · Capture Window (⌥⇧⌘2) · Record Screencast… (⌥⇧⌘R) · ─ · Open Save Folder ·
 //   Settings… (⌘,) · Check for Updates… · ─ · Quit PrtSc. Shortcut hints reflect the current bindings: shown as native
 //   key equivalents (AppKit draws them in Apple's ⌃⌥⇧⌘ order) or, for keys a menu can't express, as
 //   `KeyCombo.displayString` text. "Check for Updates…" is disabled while Sparkle isn't configured.
-//   Hidden when hideMenuBarIcon; relaunching the app while running (applicationShouldHandleReopen) opens Settings.
+//   While recording the status item is the Recording Indicator (setRecording(startDate:)): click stops,
+//   right-click/⌃-click opens the menu, whose first item is then "Stop Screencast" (Take Screenshot… is
+//   disabled, Record Screencast… hidden). Hidden when hideMenuBarIcon (but the indicator still shows
+//   while recording); relaunching the app while running (applicationShouldHandleReopen) opens Settings.
 
 // Onboarding — WelcomeWindow on first launch and whenever the Screen Recording permission is missing at
 //   launch or when a hotkey fires: explains both permissions, shows ⇧⌘2, buttons open System Settings.
@@ -319,7 +379,7 @@ struct CapturedImage: Sendable { let image: CGImage; let scale: CGFloat }
 ## Screenshot UI behaviour (summary; GNOME Shell `main` semantics)
 
 1. On open: `ScreenCapturer.freezeFrame` runs **before** any PrtSc window is shown, then PrtSc is made the active app and the panels are shown only once activation is confirmed (otherwise the open fails via `onFailure`). Then one borderless, key-capable overlay panel appears per display, at `.screenSaver` level with `collectionBehavior` `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]`, showing that display's frozen image (with or without the pointer, depending on Show Pointer).
-2. The CapturePanel is a Liquid Glass capsule near the bottom of `DisplayGeometry.panelDisplay`. It holds the mode buttons (Selection/Screen/Window), a large round capture button and a Show Pointer toggle. A separate close button sits at the top-left. The Screencast toggle is not built yet.
+2. The CapturePanel is a Liquid Glass capsule near the bottom of `DisplayGeometry.panelDisplay`. It holds the mode buttons (Selection/Screen/Window), a large round capture button and a Show Pointer toggle. A separate close button sits at the top-left. The Capture Type toggle (Screenshot | Screencast) sits at the capsule's left end; see "Screencast" below.
 3. Keys: S/C/W switch mode, P toggles the pointer, Return/Space/⌘C capture, Esc closes. In Selection mode: arrows, ⌥, ⌘, ⇧ and R per SelectionEditor. In Screen/Window mode the arrows move focus between displays/windows. Window mode is disabled (and falls back to Selection) when there are no windows.
 4. Selection mode: the area outside the Selection is dimmed, with handles at the corners and edges. The rect is remembered in SessionState.
 5. Screen mode: each display shows a selectable frame; the display under the pointer is preselected.
@@ -327,6 +387,53 @@ struct CapturedImage: Sendable { let image: CGImage; let scale: CGFloat }
 7. Capture → close the overlay → build a `CapturedImage` from the frozen frame (crop or stitch; display/window image ± pointer, the same variant the overlay shows) → `output.deliver`. Dismissing gives focus back with cooperative activation: `NSApp.yieldActivation(to: previous)`, then `previous.activate(from:options:)`.
 8. Closes on `NSApplication.didChangeScreenParametersNotification` and when PrtSc stops being the active app (⌘Tab), so a screen-wide overlay never gets left behind.
 9. Accessibility: every control has a label; mode changes and the Selection size ("640 by 480") are announced with `NSAccessibility.post(…, .announcementRequested)`.
+
+## Screencast
+
+Decided 2026-11-18. It follows GNOME Shell with these deliberate differences: Window recording is allowed, audio is optional, files are HEVC/H.264 rather than WebM, and recordings go to `~/Movies` because macOS has no `~/Videos`.
+
+**Starting a Screencast**
+- The CapturePanel gains the Capture Type toggle (Screenshot | Screencast, using the SF Symbols `camera` and `video`) at its left end, as in GNOME.
+- **V** toggles the Capture Type.
+- The new hotkey action `HotkeyAction.screencast`, default **⌥⇧⌘R** (`kVK_ANSI_R`), opens the Screenshot UI in Screencast mode, or stops the running Screencast. It is rebindable like the others. There is no Print-key alias.
+- In Screencast mode all three Capture Modes work: Selection, Screen (one display) and Window (one window, followed as it moves via `SCContentFilter(desktopIndependentWindow:)`).
+- Show Pointer sets `SCStreamConfiguration.showsCursor`.
+- The capture button turns into a red record button. Pressing it closes the overlay right away (so the overlay isn't recorded) and starts recording.
+
+**While recording**
+- The menu bar item becomes the Recording Indicator: a red dot and the elapsed time (`m:ss`, or `h:mm:ss` after an hour). Clicking it stops the recording.
+- While recording, the menu bar menu's first item is "Stop Screencast".
+- Opening the Screenshot UI during a recording is not allowed. ⇧⌘2 does nothing apart from a beep, and the hotkey/menu path for Screencast stops the recording instead.
+- Instant Captures still work during a recording.
+
+**Recording settings**
+- `SCStream` with `SCRecordingOutput` (macOS 15+) writes an `.mp4` directly.
+- Codec: **HEVC** by default (`AVVideoCodecType.hevc`); H.264 when the "Most compatible format (H.264)" setting is on.
+- Native pixel resolution of the source and 60 fps (`minimumFrameInterval = 1/60`).
+- Selection: `sourceRect` on that display. A Selection spanning displays is clamped to the display that shows most of it; the checklist notes this as a known limitation.
+- Audio is off by default. Settings has "Record system audio" (`capturesAudio`, excluding PrtSc's own sounds) and "Record microphone" (`captureMicrophone`). Turning on the microphone requests microphone permission, which needs `NSMicrophoneUsageDescription` in Info.plist.
+
+**Output**
+- File: `ScreencastFolderResolver` → `~/Movies/Screencasts` (configurable; falls back to `~/Movies`, then home). Name: `FilenameBuilder.uniqueURL(prefix: "Screencast", …, pathExtension: "mp4")` → `Screencast from 2026-11-18 01-30-00.mp4`, with the same `-1`, `-2` conflict suffixes.
+- The video is not copied to the clipboard (as in GNOME).
+- On finish: the Capture Notification titled "Screencast Recorded", body "Click here to view the video", with a thumbnail of the first frame (`AVAssetImageGenerator`). Clicking opens the video; the "Show in Finder" action works as for screenshots.
+- On failure (stream stopped by the system, disk full, permission revoked): stop cleanly, keep whatever was written if the file is playable, and show an alert with the reason.
+- When the target goes away mid-recording (the window closes or the display is unplugged), stop and save. Displays changing don't cancel a running recording unless its own display disappears.
+
+**Types**
+- PrtScCore: `CaptureType` (screenshot, screencast; `forKey("v")` toggles), `HotkeyAction.screencast` with its default, `FilenameBuilder` gaining a `prefix` parameter (default "Screenshot", keeping existing call sites), `ScreencastFolderResolver`, `RecordingClock.format(elapsed:)`. All tested.
+- App: `Capture/ScreencastRecorder` (`@MainActor @Observable`; state idle, starting, recording(startDate:) or stopping; `start(target:options:) async throws`; `stop() async`; `onFinished(URL)`; `onFailure(Error)`). `ScreencastTarget` is one of selection(rect, display), display(id) or window(id). The settings gain `screencastFolderPath`, `recordSystemAudio`, `recordMicrophone` and `screencastPreferH264`. `SessionState.lastCaptureType` remembers the last type until quit.
+- Also in PrtScCore: `RecordingGeometry` (even pixel sizes, pixel-aligned `sourceRect` for a Selection clamped to one display), tested.
+
+**Implementation notes (where this document left room)**
+- The file is written directly under its final unique name in the Screencast Folder (no temp name and move); an unplayable stub is deleted when a recording fails, a playable partial file is kept.
+- Starting needs the overlay gone first: the Screenshot UI calls `onRecord` after `dismiss()`, and the stream's content filter excludes PrtSc's own application anyway.
+- Sizes: output pixels are points × scale rounded **down to even** (encoders need even dimensions); a Selection's `sourceRect` is snapped to whole pixels so the video is a 1:1 crop (`RecordingGeometry`). A Window recording keeps its size from the start (`scalesToFit`), so resizing the window while recording scales its content.
+- The stream's stop reasons: the user stopping from the system (`SCStreamError.userStopped`), the window closing (`streamDidBecomeInactive`, then confirmed against `SCShareableContent` after 1.5 s because a minimized window reports the same signal), or the recording's own display disappearing (`didChangeScreenParametersNotification`) all stop and save normally. Any other `didStopWithError` or a failed recording output (disk full is `SCStreamError.insufficientStorage`, -3822) keeps a playable file and goes to `onFailure` as `ScreencastError.interrupted`.
+- Microphone: `start` re-checks microphone authorization and fails with an explanation if it was revoked. Under the hardened runtime the app needs the `com.apple.security.device.audio-input` entitlement as well as `NSMicrophoneUsageDescription`.
+- The Recording Indicator is the status item itself: while recording it has no menu (a click stops); right-click or ⌃-click borrows the menu for one tracking session.
+- Quitting during a recording (`applicationShouldTerminate` → `.terminateLater`) stops and finalizes the file first.
+- The open hotkey (⇧⌘2) opens in the *last used* Capture Type; the Screencast hotkey (⌥⇧⌘R) opens in Screencast mode for that opening only and does not change the remembered type.
 
 ## Testing
 

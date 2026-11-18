@@ -9,7 +9,7 @@ The full-screen interactive layer that opens when you press the open hotkey. It 
 _Avoid_: Overlay, capture window, picker
 
 **Capture Panel**:
-The floating capsule in the Screenshot UI. It holds the Capture Mode buttons, the capture button and the Show Pointer toggle, and appears on the display with the pointer.
+The floating capsule in the Screenshot UI. It holds the Capture Type toggle, the Capture Mode buttons, the capture button (a record button for a Screencast) and the Show Pointer toggle, and appears on the display with the pointer.
 _Avoid_: Toolbar, control bar, HUD
 
 **Capture Mode**:
@@ -44,9 +44,17 @@ _Avoid_: Exposé, window highlighter
 A capture triggered straight from a hotkey without opening the Screenshot UI. It is either an Instant Screen capture or an Instant Window capture.
 _Avoid_: Quick shot, silent capture
 
+**Capture Type**:
+What the Screenshot UI produces: either a **Screenshot** (a still image) or a **Screencast** (a video). The Capture Panel has a toggle for it.
+_Avoid_: Photo/video mode, output type
+
 **Screencast**:
-A video recording of a Selection or a Screen. It is planned but not in the first release.
-_Avoid_: Screen recording, video capture
+A video recording of a Selection, a Screen or a Window. It starts from the Screenshot UI and runs until you stop it.
+_Avoid_: Screen recording, video capture, movie
+
+**Recording Indicator**:
+The menu bar item shown while a Screencast is running. It displays a red dot and the elapsed time, and clicking it stops the recording.
+_Avoid_: Recording badge, timer, stop button
 
 ## Output
 
@@ -54,6 +62,10 @@ _Avoid_: Screen recording, video capture
 The folder where every screenshot is written as a file. The default is `~/Pictures/Screenshots`.
 _Avoid_: Output directory, destination
 
+**Screencast Folder**:
+The folder where every Screencast is written. The default is `~/Movies/Screencasts`.
+_Avoid_: Videos folder, recordings directory
+
 **Capture Notification**:
-The notification shown after each capture. It has a thumbnail, opens the image when clicked, and has a "Show in Finder" action.
+The notification shown after each screenshot or Screencast. It has a thumbnail, opens the file when clicked, and has a "Show in Finder" action.
 _Avoid_: Toast, preview, floating thumbnail

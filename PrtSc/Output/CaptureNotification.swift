@@ -26,10 +26,30 @@ final class CaptureNotifier {
         center.setNotificationCategories([category])
     }
 
+    /// The screenshot notification.
     /// - Parameters:
     ///   - pngData: the screenshot, used for the thumbnail (a temp copy; attachments move files).
     ///   - fileURL: the saved file, nil if saving failed.
     func post(pngData: Data, fileURL: URL?) async {
+        await post(title: String(localized: "Screenshot Captured"),
+                   body: String(localized: "You can paste the image from the clipboard"),
+                   thumbnailPNG: pngData,
+                   thumbnailName: fileURL?.lastPathComponent ?? "Screenshot.png",
+                   fileURL: fileURL)
+    }
+
+    /// The Screencast notification: "Screencast Recorded", with a thumbnail of the first frame.
+    /// Clicking it opens the video.
+    func postScreencast(thumbnailPNG: Data?, fileURL: URL) async {
+        await post(title: String(localized: "Screencast Recorded"),
+                   body: String(localized: "Click here to view the video"),
+                   thumbnailPNG: thumbnailPNG,
+                   thumbnailName: fileURL.deletingPathExtension().lastPathComponent + ".png",
+                   fileURL: fileURL)
+    }
+
+    private func post(title: String, body: String, thumbnailPNG: Data?, thumbnailName: String,
+                      fileURL: URL?) async {
         let center = UNUserNotificationCenter.current()
         var status = await center.notificationSettings().authorizationStatus
         if status == .notDetermined {
@@ -39,27 +59,35 @@ final class CaptureNotifier {
         guard status == .authorized || status == .provisional else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "Screenshot Captured")
-        content.body = String(localized: "You can paste the image from the clipboard")
+        content.title = title
+        content.body = body
         content.categoryIdentifier = Self.categoryIdentifier
         if let fileURL {
             content.userInfo = [Self.pathKey: fileURL.path]
         }
 
-        let tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("PrtSc-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: tempDirectory) }
-        do {
-            try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
-            let tempFile = tempDirectory.appendingPathComponent(fileURL?.lastPathComponent ?? "Screenshot.png")
-            try pngData.write(to: tempFile)
-            let attachment = try UNNotificationAttachment(
-                identifier: "screenshot",
-                url: tempFile,
-                options: [UNNotificationAttachmentOptionsTypeHintKey: UTType.png.identifier])
-            content.attachments = [attachment]
-        } catch {
-            // Post without a thumbnail.
+        // The attachment's file is only moved into the notification store when the request is added, so
+        // the temporary directory must outlive `center.add` (removed at the end of this function).
+        var tempDirectory: URL?
+        defer {
+            if let tempDirectory { try? FileManager.default.removeItem(at: tempDirectory) }
+        }
+        if let thumbnailPNG {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("PrtSc-\(UUID().uuidString)", isDirectory: true)
+            tempDirectory = directory
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let tempFile = directory.appendingPathComponent(thumbnailName)
+                try thumbnailPNG.write(to: tempFile)
+                let attachment = try UNNotificationAttachment(
+                    identifier: "thumbnail",
+                    url: tempFile,
+                    options: [UNNotificationAttachmentOptionsTypeHintKey: UTType.png.identifier])
+                content.attachments = [attachment]
+            } catch {
+                // Post without a thumbnail.
+            }
         }
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

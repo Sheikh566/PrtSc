@@ -10,6 +10,7 @@ PrtSc is a macOS menu bar app that brings the **GNOME Shell screenshot UI** to t
 - **Three modes**: Selection (drag or edit a rectangle), Screen (one display) and Window (a window picker that spreads out the Space's windows, unobscured).
 - **Show Pointer** toggle, applied to Selection, Screen and Window captures.
 - **Keyboard-first Selection**: resize, move, fine and large steps, reset, all like GNOME.
+- **Screencasts** from the same UI: switch the Capture Type to video (or press V, or ⌥⇧⌘R), pick a Selection, a Screen or a Window and record. A red dot and timer in the menu bar show the recording; click it (or press ⌥⇧⌘R again) to stop. Saved as HEVC (or H.264) `.mp4` in `~/Movies/Screencasts` at native resolution and 60 fps, with optional system audio and microphone, plus a notification with a thumbnail.
 - **Instant captures** without opening the UI: whole screen, or the front-most window including its sheets and popovers.
 - **Multi-display aware**: the panel opens on the display with the pointer, and a Selection can span displays with different scale factors.
 - **Output the GNOME way**: every capture goes to the clipboard and to a PNG named `Screenshot from YYYY-MM-DD HH-MM-SS.png` in `~/Pictures/Screenshots` (configurable), with a notification (thumbnail, click to open, Show in Finder).
@@ -17,7 +18,7 @@ PrtSc is a macOS menu bar app that brings the **GNOME Shell screenshot UI** to t
 - **Native bits**: ScreenCaptureKit, Liquid Glass, Reduce Transparency fallback, VoiceOver labels, launch at login, optional hidden menu bar icon.
 - **Updates** through Sparkle.
 
-Not built yet: Screencast (screen recording). See [ADR 0001](docs/adr/0001-copy-gnome-shell-screenshot-ui-not-gnome-screenshot-app.md) for what is deliberately out of scope.
+See [ADR 0001](docs/adr/0001-copy-gnome-shell-screenshot-ui-not-gnome-screenshot-app.md) for what is deliberately out of scope.
 
 ## Shortcuts
 
@@ -28,6 +29,7 @@ Not built yet: Screencast (screen recording). See [ADR 0001](docs/adr/0001-copy-
 | ⇧⌘2 | Open the Screenshot UI (press again to close it) |
 | ⌃⇧⌘2 | Instant Screen: capture the display under the pointer |
 | ⌥⇧⌘2 | Instant Window: capture the front-most window |
+| ⌥⇧⌘R | Open the Screenshot UI in Screencast mode; while recording, stop the Screencast |
 | F13 | Same as ⇧⌘2 (the Print key on PC keyboards sends F13) |
 | ⇧F13 | Same as ⌃⇧⌘2 |
 | ⌥F13 | Same as ⌥⇧⌘2 |
@@ -37,8 +39,9 @@ Not built yet: Screencast (screen recording). See [ADR 0001](docs/adr/0001-copy-
 | Key | Action |
 | --- | --- |
 | S / C / W | Selection / Screen / Window mode |
+| V | Switch the Capture Type between Screenshot and Screencast |
 | P | Toggle Show Pointer |
-| Return, Space or ⌘C | Capture |
+| Return, Space or ⌘C | Capture (in Screencast mode: start recording) |
 | Esc | Close without capturing |
 | ← → ↑ ↓ | Selection mode: resize (→ and ↓ grow, ← and ↑ shrink, 5 pt steps). Screen and Window modes: move between displays or windows |
 | ⌥ + arrows | Move the Selection instead of resizing it |
@@ -69,9 +72,10 @@ Requires macOS 26 (Tahoe) or later.
 ## Permissions
 
 - **Screen & System Audio Recording** (required): PrtSc cannot capture anything without it. The Welcome window opens on first launch and explains it; grant it in System Settings > Privacy & Security > Screen & System Audio Recording. macOS may ask you to quit and reopen PrtSc afterwards.
-- **Notifications** (optional): for the "Screenshot Captured" notification. Capture, clipboard and saving work without it.
+- **Microphone** (optional): only if you turn on "Record microphone" in Settings. macOS asks the first time; if you say no, the switch goes back off.
+- **Notifications** (optional): for the "Screenshot Captured" and "Screencast Recorded" notifications. Capture, clipboard and saving work without it.
 
-PrtSc is not sandboxed (it needs to write to your Save Folder and use global hotkeys) and sends nothing anywhere except the Sparkle update check to `sheikh566.github.io`.
+PrtSc is not sandboxed (it needs to write to your Save Folder and Screencast Folder and use global hotkeys) and sends nothing anywhere except the Sparkle update check to `sheikh566.github.io`.
 
 ## Build from source
 

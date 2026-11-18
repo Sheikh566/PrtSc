@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Foundation
 import ImageIO
 import PrtScCore
@@ -29,6 +30,18 @@ final class OutputService: CaptureSink {
     /// The folder screenshots are written to right now.
     var saveFolderURL: URL {
         SaveFolder.url(configured: settings.saveFolderPath, home: home)
+    }
+
+    /// The folder Screencasts are written to right now (not created yet).
+    var screencastFolderURL: URL {
+        ScreencastFolder.url(configured: settings.screencastFolderPath, home: home)
+    }
+
+    /// A finished Screencast: post the Capture Notification (no clipboard, no sound). The file is already
+    /// in the Screencast Folder and in recent documents.
+    func deliverScreencast(_ url: URL) async {
+        let thumbnail = await Self.thumbnailPNG(forVideoAt: url)
+        await notifier.postScreencast(thumbnailPNG: thumbnail, fileURL: url)
     }
 
     /// Deliveries are serialized in request order: a later capture can't reach the clipboard before an
@@ -110,6 +123,24 @@ final class OutputService: CaptureSink {
         CGImageDestinationAddImage(destination, capture.image, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return Encoded(png: data as Data, tiff: ImageEncoding.tiffData(for: capture))
+    }
+
+    // MARK: - Screencast thumbnail
+
+    /// The first frame of a video as PNG data (at most 640 px wide), nil if it can't be read.
+    nonisolated static func thumbnailPNG(forVideoAt url: URL) async -> Data? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 640, height: 640)
+        // The first sample may not sit exactly at time zero.
+        generator.requestedTimeToleranceBefore = .positiveInfinity
+        generator.requestedTimeToleranceAfter = .positiveInfinity
+        guard let (image, _) = try? await generator.image(at: .zero) else { return nil }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
+        else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 
     // MARK: - Sound

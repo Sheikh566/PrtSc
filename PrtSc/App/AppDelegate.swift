@@ -16,6 +16,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.start()
     }
 
+    /// Quitting during a Screencast waits for the recording to be finalized, so the file stays playable.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let coordinator, coordinator.screencastRecorder.isBusy else { return .terminateNow }
+        Task { @MainActor in
+            await coordinator.stopScreencastForTermination()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

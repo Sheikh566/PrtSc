@@ -63,6 +63,12 @@ enum KeyNames {
 
 public enum HotkeyAction: String, CaseIterable, Codable, Sendable {
     case openScreenshotUI, instantScreen, instantWindow
+    /// Opens the Screenshot UI in Screencast mode, or stops the running Screencast.
+    case screencast
+
+    /// Actions added after the first release. A stored binding set that lacks one of them predates it, so
+    /// decoding gives it its default instead of treating it as cleared; clearing one is stored as `null`.
+    var addedAfterFirstRelease: Bool { self == .screencast }
 }
 
 public struct HotkeyBindings: Codable, Equatable, Sendable {
@@ -72,11 +78,12 @@ public struct HotkeyBindings: Codable, Equatable, Sendable {
         self.bindings = bindings
     }
 
-    /// ⇧⌘2 / ⌃⇧⌘2 / ⌥⇧⌘2  (kVK_ANSI_2 = 0x13)
+    /// ⇧⌘2 / ⌃⇧⌘2 / ⌥⇧⌘2  (kVK_ANSI_2 = 0x13), ⌥⇧⌘R for Screencast (kVK_ANSI_R = 0x0F)
     public static let defaults = HotkeyBindings(bindings: [
         .openScreenshotUI: KeyCombo(keyCode: 0x13, modifiers: [.command, .shift]),
         .instantScreen:    KeyCombo(keyCode: 0x13, modifiers: [.control, .command, .shift]),
         .instantWindow:    KeyCombo(keyCode: 0x13, modifiers: [.option, .command, .shift]),
+        .screencast:       KeyCombo(keyCode: 0x0F, modifiers: [.option, .command, .shift]),
     ])
 
     /// Fixed Print-key aliases (PC keyboards send F13, kVK_F13 = 0x69):
@@ -103,19 +110,28 @@ public struct HotkeyBindings: Codable, Equatable, Sendable {
 
     // MARK: Codable — a JSON object keyed by HotkeyAction.rawValue.
     // (A [HotkeyAction: KeyCombo] dictionary would otherwise encode as a flat array.)
+    // An action added after the first release that is absent from the stored object gets its default
+    // (the object predates it); a user who cleared it is stored as an explicit `null`.
 
     public init(from decoder: any Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode([String: KeyCombo].self)
+        let raw = try decoder.singleValueContainer().decode([String: KeyCombo?].self)
         var result: [HotkeyAction: KeyCombo] = [:]
         for (key, combo) in raw {
-            if let action = HotkeyAction(rawValue: key) { result[action] = combo }  // unknown actions are ignored
+            // Unknown actions are ignored; `null` means the action is unbound.
+            if let action = HotkeyAction(rawValue: key), let combo { result[action] = combo }
+        }
+        for action in HotkeyAction.allCases where action.addedAfterFirstRelease && raw[action.rawValue] == nil {
+            result[action] = Self.defaults.bindings[action]
         }
         self.bindings = result
     }
 
     public func encode(to encoder: any Encoder) throws {
-        var raw: [String: KeyCombo] = [:]
-        for (action, combo) in bindings { raw[action.rawValue] = combo }
+        var raw: [String: KeyCombo?] = [:]
+        for (action, combo) in bindings { raw[action.rawValue] = .some(combo) }
+        for action in HotkeyAction.allCases where action.addedAfterFirstRelease && bindings[action] == nil {
+            raw[action.rawValue] = .some(nil)
+        }
         var container = encoder.singleValueContainer()
         try container.encode(raw)
     }

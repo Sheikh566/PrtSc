@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import PrtScCore
 import Sparkle
 import SwiftUI
@@ -12,6 +13,8 @@ struct SettingsView: View {
     let updater: SPUUpdater?
 
     @State private var automaticallyChecksForUpdates: Bool
+    /// Why "Record microphone" was switched back off (permission denied).
+    @State private var microphoneMessage: String?
 
     init(settings: SettingsStore, hotkeyManager: HotkeyManager, recordingSession: HotkeyRecordingSession, updater: SPUUpdater?) {
         self.settings = settings
@@ -25,11 +28,12 @@ struct SettingsView: View {
         Form {
             hotkeysSection
             saveFolderSection
+            screencastSection
             generalSection
             aboutSection
         }
         .formStyle(.grouped)
-        .frame(minWidth: 500, idealWidth: 540, minHeight: 420, idealHeight: 640)
+        .frame(minWidth: 500, idealWidth: 540, minHeight: 420, idealHeight: 720)
         .onAppear { settings.refreshLaunchAtLogin() }
     }
 
@@ -154,6 +158,114 @@ struct SettingsView: View {
         let url = SaveFolder.url(configured: settings.saveFolderPath)
         try? SaveFolder.ensureExists(url)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: - Screencast
+
+    private var screencastSection: some View {
+        Section {
+            LabeledContent("Folder") {
+                Text(screencastDisplayPath)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Button("Choose…", action: chooseScreencastFolder)
+                Button("Reveal", action: revealScreencastFolder)
+                Spacer()
+                Button("Reset to Default") { settings.screencastFolderPath = nil }
+                    .disabled(settings.screencastFolderPath == nil)
+            }
+            Toggle("Record system audio", isOn: $settings.recordSystemAudio)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Record microphone", isOn: microphoneBinding)
+                if let microphoneMessage {
+                    Text(microphoneMessage)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Open Microphone Settings", action: openMicrophoneSettings)
+                        .font(.caption)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Most compatible format (H.264)", isOn: $settings.screencastPreferH264)
+                Text("Screencasts are saved as HEVC by default. Turn this on for players and editors that can't read HEVC.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Screencast")
+        } footer: {
+            Text("Screencasts are saved as .mp4 files at the screen's native resolution and 60 frames per second. They are not copied to the clipboard.")
+        }
+    }
+
+    private var screencastDisplayPath: String {
+        (ScreencastFolder.url(configured: settings.screencastFolderPath).path as NSString).abbreviatingWithTildeInPath
+    }
+
+    private func chooseScreencastFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Select")
+        panel.message = String(localized: "Choose where PrtSc saves Screencasts.")
+        panel.directoryURL = ScreencastFolder.url(configured: settings.screencastFolderPath)
+        Task {
+            let response = await panel.begin()
+            if response == .OK, let url = panel.url {
+                settings.screencastFolderPath = url.path
+            }
+        }
+    }
+
+    private func revealScreencastFolder() {
+        let url = ScreencastFolder.url(configured: settings.screencastFolderPath)
+        try? SaveFolder.ensureExists(url)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Switching the microphone on asks for permission first; if it is denied the switch goes back off.
+    private var microphoneBinding: Binding<Bool> {
+        Binding(
+            get: { settings.recordMicrophone },
+            set: { setMicrophone($0) }
+        )
+    }
+
+    private func setMicrophone(_ enabled: Bool) {
+        microphoneMessage = nil
+        guard enabled else {
+            settings.recordMicrophone = false
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            settings.recordMicrophone = true
+        case .notDetermined:
+            Task {
+                let granted = await AVCaptureDevice.requestAccess(for: .audio)
+                settings.recordMicrophone = granted
+                if !granted { microphoneMessage = Self.microphoneDeniedMessage }
+            }
+        default:
+            settings.recordMicrophone = false
+            microphoneMessage = Self.microphoneDeniedMessage
+        }
+    }
+
+    private static var microphoneDeniedMessage: String {
+        String(localized: "PrtSc doesn't have access to the microphone. Allow it in System Settings › Privacy & Security › Microphone.")
+    }
+
+    private func openMicrophoneSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     // MARK: - General

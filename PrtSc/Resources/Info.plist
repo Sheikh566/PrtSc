@@ -28,6 +28,8 @@
 	<string>Copyright © 2026 Sheikh566. MIT License.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PrtSc records your microphone into Screencasts when you turn on “Record microphone” in Settings.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>PrtSc needs Screen &amp; System Audio Recording access to take screenshots of your displays and windows.</string>
 	<key>SUEnableAutomaticChecks</key>

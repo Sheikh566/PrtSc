@@ -20,20 +20,25 @@ final class ScreenshotUIModel {
     let windowCells: [UInt32: [WindowCell]]
 
     private(set) var mode: CaptureMode
+    private(set) var captureType: CaptureType
     private(set) var showPointer: Bool
     private(set) var editor: SelectionEditor
     private(set) var selectedDisplayID: UInt32
     private(set) var selectedWindowID: UInt32?
+    /// The hover tooltip for a Capture Panel control (name + keyboard shortcut), or nil.
+    private(set) var tooltip: PanelTooltip?
 
     @ObservationIgnored private let session: SessionState
     @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored var onClose: (() -> Void)?
     @ObservationIgnored var onCapture: ((CapturedImage) -> Void)?
+    /// The record button (Screencast mode): what to record, and whether the pointer is shown.
+    @ObservationIgnored var onRecord: ((ScreencastTarget, _ showsPointer: Bool) -> Void)?
 
     /// Window mode needs at least one window to pick.
     var windowModeAvailable: Bool { windowCells.values.contains { !$0.isEmpty } }
 
-    init(frame: FrozenFrame, session: SessionState, frontmostPID: Int32?) {
+    init(frame: FrozenFrame, session: SessionState, frontmostPID: Int32?, captureType: CaptureType) {
         let displays = frame.displays.map(\.info)
         let panelDisplayID = DisplayGeometry.panelDisplay(pointer: frame.pointer, displays: displays)?.displayID
             ?? displays.first?.displayID ?? 0
@@ -48,6 +53,7 @@ final class ScreenshotUIModel {
         self.session = session
         self.panelDisplayID = panelDisplayID
         self.windowCells = cells
+        self.captureType = captureType
         self.showPointer = session.showPointer
         self.editor = SelectionEditor(bounds: DisplayGeometry.union(of: displays),
                                       primaryDisplayFrame: primaryFrame,
@@ -72,6 +78,14 @@ final class ScreenshotUIModel {
         session.lastCaptureMode = newMode
         announce(newMode.announcement)
         if newMode == .selection { announceSelectionSize() }
+        notify()
+    }
+
+    func setCaptureType(_ newType: CaptureType) {
+        guard newType != captureType else { return }
+        captureType = newType
+        session.lastCaptureType = newType
+        announce(newType.announcement)
         notify()
     }
 
@@ -208,6 +222,10 @@ final class ScreenshotUIModel {
             setMode(newMode)
             return true
         }
+        if let newType = CaptureType.forKey(character, from: captureType) {
+            setCaptureType(newType)
+            return true
+        }
         switch character {
         case "p":
             togglePointer()
@@ -230,6 +248,10 @@ final class ScreenshotUIModel {
     }
 
     func capture() {
+        if captureType == .screencast {
+            record()
+            return
+        }
         guard let captured = makeCapture() else {
             NSSound.beep()
             return
@@ -237,6 +259,36 @@ final class ScreenshotUIModel {
         session.lastCaptureMode = mode
         session.rememberedSelection = editor.rect
         onCapture?(captured)
+    }
+
+    /// Screencast mode: what the record button records, from the current mode. The overlay closes first
+    /// (`onRecord` is the controller's job), so the recording never contains it.
+    func record() {
+        guard let target = makeScreencastTarget() else {
+            NSSound.beep()
+            return
+        }
+        session.lastCaptureMode = mode
+        session.lastCaptureType = .screencast
+        session.rememberedSelection = editor.rect
+        onRecord?(target, showPointer)
+    }
+
+    private func makeScreencastTarget() -> ScreencastTarget? {
+        switch mode {
+        case .selection:
+            // A Selection that spans displays is recorded from the display that shows most of it.
+            guard let display = DisplayGeometry.displayShowingMost(of: editor.rect, displays: displays) else {
+                return nil
+            }
+            return .selection(rect: editor.rect, display: display)
+        case .screen:
+            guard displays.contains(where: { $0.displayID == selectedDisplayID }) else { return nil }
+            return .display(id: selectedDisplayID)
+        case .window:
+            guard let id = selectedWindowID, snapshot(forWindow: id) != nil else { return nil }
+            return .window(id: id)
+        }
     }
 
     /// Cuts the image for the current mode out of the Frozen Frame.
@@ -255,6 +307,21 @@ final class ScreenshotUIModel {
             // The same image the Window Picker shows for this window.
             return CapturedImage(image: snapshot.image(showingPointer: showPointer), scale: snapshot.scale)
         }
+    }
+
+    // MARK: Tooltips
+
+    /// Shows (or, with nil, hides) the hover tooltip. Drawn by OverlayView inside the overlay because
+    /// AppKit's own tooltips sit below the overlay's `.screenSaver` window level and would be hidden.
+    func setTooltip(_ newTooltip: PanelTooltip?) {
+        guard tooltip != newTooltip else { return }
+        tooltip = newTooltip
+        notify()
+    }
+
+    /// Hides the tooltip only if it is still the one for `id` (hover-exit of an older control is ignored).
+    func clearTooltip(id: PanelTooltip.ID) {
+        if tooltip?.id == id { setTooltip(nil) }
     }
 
     // MARK: Announcements and notifications

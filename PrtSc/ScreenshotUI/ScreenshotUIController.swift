@@ -40,15 +40,18 @@ final class ScreenshotUIController {
         let generation: Int
         /// The app that had focus when the UI was requested.
         let previousApp: NSRunningApplication?
+        /// The Capture Type the UI opens with.
+        let captureType: CaptureType
         var task: Task<Void, Never>?
         /// Displays changed: the frozen images no longer match. Installed from the start, so it covers
         /// preparation as well as presentation.
         var screenObserver: NSObjectProtocol?
         var presentation: Presentation?
 
-        init(generation: Int, previousApp: NSRunningApplication?) {
+        init(generation: Int, previousApp: NSRunningApplication?, captureType: CaptureType) {
             self.generation = generation
             self.previousApp = previousApp
+            self.captureType = captureType
         }
     }
 
@@ -66,6 +69,10 @@ final class ScreenshotUIController {
     /// or macOS refused to activate PrtSc).
     var onFailure: (@MainActor (Error) -> Void)?
 
+    /// Called on the main actor after the overlay has been closed, when the user presses the record button
+    /// in Screencast mode. The owner starts the recording.
+    var onRecord: (@MainActor (ScreencastTarget, _ showsPointer: Bool) -> Void)?
+
     init(capturer: ScreenCapturer, output: CaptureSink, settings: SettingsStore, session: SessionState) {
         self.capturer = capturer
         self.output = output
@@ -75,9 +82,16 @@ final class ScreenshotUIController {
 
     /// Opens the Screenshot UI; closes it (or cancels opening it) if already open or opening, which is
     /// what the open hotkey does while the UI is up.
-    func toggle() {
-        if current != nil {
-            dismiss()
+    /// - Parameter captureType: the Capture Type to open in (the Screencast hotkey passes `.screencast`);
+    ///   nil opens in the last used one. While the UI is open in the *other* type, this switches to
+    ///   `captureType` instead of closing it.
+    func toggle(captureType: CaptureType? = nil) {
+        if let open = current {
+            if let captureType, let model = open.presentation?.model, model.captureType != captureType {
+                model.setCaptureType(captureType)
+            } else {
+                dismiss()
+            }
             return
         }
 
@@ -87,7 +101,10 @@ final class ScreenshotUIController {
         let includeShadows = settings.includeWindowShadow
 
         generation += 1
-        let newSession = Session(generation: generation, previousApp: frontmost)
+        // An explicit type (the Screencast hotkey) applies to this opening only; the remembered one changes
+        // when the user switches type in the UI or records.
+        let openingType = captureType ?? session.lastCaptureType
+        let newSession = Session(generation: generation, previousApp: frontmost, captureType: openingType)
         newSession.screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -115,6 +132,7 @@ final class ScreenshotUIController {
             presentation.model.onChange = nil
             presentation.model.onClose = nil
             presentation.model.onCapture = nil
+            presentation.model.onRecord = nil
             for panel in presentation.panels {
                 panel.keyHandler = nil
                 panel.orderOut(nil)
@@ -175,7 +193,8 @@ final class ScreenshotUIController {
     /// Builds the panels and shows them. Runs synchronously right after the last staleness check.
     private func present(frame: FrozenFrame, in session: Session) {
         let model = ScreenshotUIModel(frame: frame, session: self.session,
-                                      frontmostPID: session.previousApp?.processIdentifier)
+                                      frontmostPID: session.previousApp?.processIdentifier,
+                                      captureType: session.captureType)
         var panels: [OverlayPanel] = []
         var overlays: [OverlayView] = []
         for snapshot in frame.displays {
@@ -192,6 +211,7 @@ final class ScreenshotUIController {
         }
         model.onClose = { [weak self] in self?.dismiss() }
         model.onCapture = { [weak self] captured in self?.finish(with: captured) }
+        model.onRecord = { [weak self] target, showsPointer in self?.finishRecording(target, showsPointer: showsPointer) }
 
         // Switching to another app (⌘Tab) closes the UI instead of leaving a screen-wide overlay behind.
         // Installed only now that PrtSc is active, so it can't fire for an activation that never happened.
@@ -217,6 +237,12 @@ final class ScreenshotUIController {
         dismiss()
         let output = output
         Task { await output.deliver(captured) }
+    }
+
+    /// Closes the overlay first, so it isn't in the recording, then asks the owner to start recording.
+    private func finishRecording(_ target: ScreencastTarget, showsPointer: Bool) {
+        dismiss()
+        onRecord?(target, showsPointer)
     }
 
     // MARK: Focus

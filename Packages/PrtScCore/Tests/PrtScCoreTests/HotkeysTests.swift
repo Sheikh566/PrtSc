@@ -81,6 +81,18 @@ struct HotkeyBindingsTests {
         #expect(d[.openScreenshotUI] == KeyCombo(keyCode: 0x13, modifiers: [.command, .shift]))
         #expect(d[.instantScreen] == KeyCombo(keyCode: 0x13, modifiers: [.control, .command, .shift]))
         #expect(d[.instantWindow] == KeyCombo(keyCode: 0x13, modifiers: [.option, .command, .shift]))
+        // ⌥⇧⌘R (kVK_ANSI_R = 0x0F)
+        #expect(d[.screencast] == KeyCombo(keyCode: 0x0F, modifiers: [.option, .shift, .command]))
+        #expect(d[.screencast]?.displayString == "⌥⇧⌘R")
+    }
+
+    @Test func screencastActionIsLastAndRoundTripsByRawValue() {
+        #expect(HotkeyAction.allCases == [.openScreenshotUI, .instantScreen, .instantWindow, .screencast])
+        #expect(HotkeyAction(rawValue: "screencast") == .screencast)
+    }
+
+    @Test func screencastHasNoPrintKeyAlias() {
+        #expect(!HotkeyBindings.printKeyAliases.values.contains(.screencast))
     }
 
     @Test func printKeyAliasesMatchSpec() {
@@ -110,7 +122,6 @@ struct HotkeyBindingsTests {
     @Test func emptyRoundTrip() throws {
         let empty = HotkeyBindings(bindings: [:])
         let data = try JSONEncoder().encode(empty)
-        #expect(String(decoding: data, as: UTF8.self) == "{}")
         #expect(try JSONDecoder().decode(HotkeyBindings.self, from: data) == empty)
     }
 
@@ -126,14 +137,53 @@ struct HotkeyBindingsTests {
     @Test func decodesHandWrittenObject() throws {
         let json = #"{"openScreenshotUI":{"keyCode":105,"modifiers":0}}"#
         let decoded = try JSONDecoder().decode(HotkeyBindings.self, from: Data(json.utf8))
-        #expect(decoded.bindings == [.openScreenshotUI: KeyCombo(keyCode: 105, modifiers: [])])
+        #expect(decoded.bindings[.openScreenshotUI] == KeyCombo(keyCode: 105, modifiers: []))
+        // Actions that older versions never stored are not "cleared"; they get their default.
+        #expect(decoded.bindings[.screencast] == HotkeyBindings.defaults.bindings[.screencast])
+        #expect(decoded.bindings[.instantScreen] == nil)
+        #expect(decoded.bindings.count == 2)
     }
 
     @Test func decodingIgnoresUnknownActions() throws {
         let json = #"{"openScreenshotUI":{"keyCode":105,"modifiers":0},"futureAction":{"keyCode":1,"modifiers":0}}"#
         let decoded = try JSONDecoder().decode(HotkeyBindings.self, from: Data(json.utf8))
-        #expect(decoded.bindings.count == 1)
+        #expect(decoded.bindings.count == 2)
         #expect(decoded.bindings[.openScreenshotUI] != nil)
+        #expect(decoded.bindings[.screencast] != nil)
+    }
+
+    @Test func olderStoredJSONWithoutScreencastGetsTheDefault() throws {
+        // What 0.x wrote before the Screencast action existed.
+        let json = """
+        {"openScreenshotUI":{"keyCode":19,"modifiers":3},
+         "instantScreen":{"keyCode":19,"modifiers":11},
+         "instantWindow":{"keyCode":19,"modifiers":7}}
+        """
+        let decoded = try JSONDecoder().decode(HotkeyBindings.self, from: Data(json.utf8))
+        #expect(decoded == HotkeyBindings.defaults)
+    }
+
+    @Test func olderStoredJSONKeepsCustomisedBindingsAndAddsScreencastDefault() throws {
+        let json = #"{"openScreenshotUI":{"keyCode":105,"modifiers":0}}"#
+        var expected = HotkeyBindings(bindings: [.openScreenshotUI: KeyCombo(keyCode: 105, modifiers: [])])
+        expected.bindings[.screencast] = HotkeyBindings.defaults.bindings[.screencast]
+        #expect(try JSONDecoder().decode(HotkeyBindings.self, from: Data(json.utf8)) == expected)
+    }
+
+    @Test func aClearedScreencastBindingStaysClearedAfterRoundTrip() throws {
+        var cleared = HotkeyBindings.defaults
+        cleared.bindings[.screencast] = nil
+        let data = try JSONEncoder().encode(cleared)
+        let decoded = try JSONDecoder().decode(HotkeyBindings.self, from: data)
+        #expect(decoded == cleared)
+        #expect(decoded.bindings[.screencast] == nil)
+    }
+
+    @Test func aCustomScreencastBindingIsKept() throws {
+        var custom = HotkeyBindings.defaults
+        custom.bindings[.screencast] = KeyCombo(keyCode: 0x0F, modifiers: [.control])
+        let decoded = try JSONDecoder().decode(HotkeyBindings.self, from: JSONEncoder().encode(custom))
+        #expect(decoded == custom)
     }
 
     @Test func decodingRejectsNonObject() {
@@ -151,10 +201,24 @@ struct HotkeyBindingsTests {
         #expect(c[combo] == [.openScreenshotUI, .instantScreen])
     }
 
-    @Test func conflictsListsAllThreeActions() {
+    @Test func conflictsListsAllActions() {
         let combo = KeyCombo(keyCode: 0x00, modifiers: [.control])
         let b = HotkeyBindings(bindings: Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { ($0, combo) }))
-        #expect(b.conflicts() == [combo: [.openScreenshotUI, .instantScreen, .instantWindow]])
+        #expect(b.conflicts() == [combo: [.openScreenshotUI, .instantScreen, .instantWindow, .screencast]])
+    }
+
+    @Test func conflictsCoversScreencast() {
+        let combo = KeyCombo(keyCode: 0x13, modifiers: [.command, .shift])
+        var b = HotkeyBindings.defaults
+        b.bindings[.screencast] = combo
+        #expect(b.conflicts() == [combo: [.openScreenshotUI, .screencast]])
+    }
+
+    @Test func screencastBoundToAPrintKeyAliasConflicts() {
+        let f13 = KeyCombo(keyCode: 0x69, modifiers: [])
+        var b = HotkeyBindings.defaults
+        b.bindings[.screencast] = f13
+        #expect(b.conflicts() == [f13: [.openScreenshotUI, .screencast]])
     }
 
     @Test func conflictsCountsPrintKeyAliasCollisions() {

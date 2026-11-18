@@ -7,6 +7,7 @@ extension HotkeyAction {
         case .openScreenshotUI: String(localized: "Take Screenshot…")
         case .instantScreen: String(localized: "Capture Screen")
         case .instantWindow: String(localized: "Capture Window")
+        case .screencast: String(localized: "Record Screencast…")
         }
     }
 
@@ -16,6 +17,7 @@ extension HotkeyAction {
         case .openScreenshotUI: String(localized: "Take a Screenshot")
         case .instantScreen: String(localized: "Capture Screen")
         case .instantWindow: String(localized: "Capture Window")
+        case .screencast: String(localized: "Record a Screencast")
         }
     }
 
@@ -24,6 +26,7 @@ extension HotkeyAction {
         case .openScreenshotUI: String(localized: "Opens the screenshot UI")
         case .instantScreen: String(localized: "Captures the display under the pointer immediately")
         case .instantWindow: String(localized: "Captures the frontmost window immediately")
+        case .screencast: String(localized: "Opens the screenshot UI in Screencast mode, or stops the running recording")
         }
     }
 }

@@ -9,6 +9,7 @@ final class SessionState {
     var showPointer: Bool = false
     var rememberedSelection: CGRect?
     var lastCaptureMode: CaptureMode = .selection
+    var lastCaptureType: CaptureType = .screenshot
 
     init() {}
 }

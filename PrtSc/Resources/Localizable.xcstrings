@@ -13,6 +13,17 @@
       },
       "comment": "Spoken selection size: width by height in points"
     },
+    "A Screencast is already being recorded.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Screencast is already being recorded."
+          }
+        }
+      }
+    },
     "Add a modifier key": {
       "extractionState": "manual",
       "localizations": {
@@ -112,6 +123,17 @@
         }
       }
     },
+    "Capture Type": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture Type"
+          }
+        }
+      }
+    },
     "Capture Window": {
       "extractionState": "manual",
       "localizations": {
@@ -152,6 +174,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check for Updates…"
+          }
+        }
+      }
+    },
+    "Choose where PrtSc saves Screencasts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where PrtSc saves Screencasts."
           }
         }
       }
@@ -200,6 +233,28 @@
         }
       }
     },
+    "Click here to view the video": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click here to view the video"
+          }
+        }
+      }
+    },
+    "Click to stop the Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to stop the Screencast"
+          }
+        }
+      }
+    },
     "Click, then press the new shortcut": {
       "extractionState": "manual",
       "localizations": {
@@ -218,6 +273,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Close"
+          }
+        }
+      }
+    },
+    "Couldn't Record Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't Record Screencast"
           }
         }
       }
@@ -376,6 +442,17 @@
         }
       }
     },
+    "Most compatible format (H.264)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Most compatible format (H.264)"
+          }
+        }
+      }
+    },
     "No display could be found.": {
       "extractionState": "manual",
       "localizations": {
@@ -453,6 +530,17 @@
         }
       }
     },
+    "Open Microphone Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Microphone Settings"
+          }
+        }
+      }
+    },
     "Open Save Folder": {
       "extractionState": "manual",
       "localizations": {
@@ -482,6 +570,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Opens the screenshot UI"
+          }
+        }
+      }
+    },
+    "Opens the screenshot UI in Screencast mode, or stops the running recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the screenshot UI in Screencast mode, or stops the running recording"
           }
         }
       }
@@ -552,6 +651,39 @@
         }
       }
     },
+    "PrtSc doesn't have access to the microphone. Allow it in System Settings › Privacy & Security › Microphone, or turn off “Record microphone” in PrtSc Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PrtSc doesn't have access to the microphone. Allow it in System Settings › Privacy & Security › Microphone, or turn off “Record microphone” in PrtSc Settings."
+          }
+        }
+      }
+    },
+    "PrtSc doesn't have access to the microphone. Allow it in System Settings › Privacy & Security › Microphone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PrtSc doesn't have access to the microphone. Allow it in System Settings › Privacy & Security › Microphone."
+          }
+        }
+      }
+    },
+    "PrtSc doesn't have permission to record the screen. Allow it in System Settings › Privacy & Security › Screen & System Audio Recording.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PrtSc doesn't have permission to record the screen. Allow it in System Settings › Privacy & Security › Screen & System Audio Recording."
+          }
+        }
+      }
+    },
     "Quit PrtSc": {
       "extractionState": "manual",
       "localizations": {
@@ -559,6 +691,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "Quit PrtSc"
+          }
+        }
+      }
+    },
+    "Record": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record"
+          }
+        }
+      }
+    },
+    "Record Screencast…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record Screencast…"
+          }
+        }
+      }
+    },
+    "Record a Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record a Screencast"
+          }
+        }
+      }
+    },
+    "Record microphone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record microphone"
+          }
+        }
+      }
+    },
+    "Record system audio": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record system audio"
+          }
+        }
+      }
+    },
+    "Recording Screencast, %@. Click to stop.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording Screencast, %@. Click to stop."
           }
         }
       }
@@ -673,6 +871,72 @@
         }
       }
     },
+    "Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencast"
+          }
+        }
+      }
+    },
+    "Screencast Recorded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencast Recorded"
+          }
+        }
+      }
+    },
+    "Screencast mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencast mode"
+          }
+        }
+      }
+    },
+    "Screencasts are saved as .mp4 files at the screen's native resolution and 60 frames per second. They are not copied to the clipboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencasts are saved as .mp4 files at the screen's native resolution and 60 frames per second. They are not copied to the clipboard."
+          }
+        }
+      }
+    },
+    "Screencasts are saved as HEVC by default. Turn this on for players and editors that can't read HEVC.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencasts are saved as HEVC by default. Turn this on for players and editors that can't read HEVC."
+          }
+        }
+      }
+    },
+    "Screenshot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot"
+          }
+        }
+      }
+    },
     "Screenshot Captured": {
       "extractionState": "manual",
       "localizations": {
@@ -691,6 +955,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Screenshot area"
+          }
+        }
+      }
+    },
+    "Screenshot mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot mode"
           }
         }
       }
@@ -827,6 +1102,28 @@
         }
       }
     },
+    "Stop Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop Screencast"
+          }
+        }
+      }
+    },
+    "System audio couldn't be recorded.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System audio couldn't be recorded."
+          }
+        }
+      }
+    },
     "Take Screenshot…": {
       "extractionState": "manual",
       "localizations": {
@@ -882,6 +1179,39 @@
         }
       }
     },
+    "The microphone couldn't be recorded.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The microphone couldn't be recorded."
+          }
+        }
+      }
+    },
+    "The part that was recorded is saved as “%@”.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The part that was recorded is saved as “%@”."
+          }
+        }
+      }
+    },
+    "The recording could not be saved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recording could not be saved."
+          }
+        }
+      }
+    },
     "The screenshot is still on the clipboard.": {
       "extractionState": "manual",
       "localizations": {
@@ -893,6 +1223,17 @@
         }
       }
     },
+    "The selected area isn't on a display.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected area isn't on a display."
+          }
+        }
+      }
+    },
     "The window is no longer available.": {
       "extractionState": "manual",
       "localizations": {
@@ -900,6 +1241,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "The window is no longer available."
+          }
+        }
+      }
+    },
+    "The window or display being recorded is no longer available.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The window or display being recorded is no longer available."
+          }
+        }
+      }
+    },
+    "There isn't enough free disk space to keep recording.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There isn't enough free disk space to keep recording."
           }
         }
       }
@@ -977,6 +1340,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "You can paste the image from the clipboard"
+          }
+        }
+      }
+    },
+    "macOS stopped the recording.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS stopped the recording."
           }
         }
       }

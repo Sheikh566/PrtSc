@@ -90,4 +90,33 @@ struct FilenameBuilderTests {
             "Screenshot from 2026-11-17 23-12-04-2.png",
         ])
     }
+
+    // MARK: prefix
+
+    @Test func baseNameDefaultsToScreenshotPrefix() {
+        #expect(FilenameBuilder.baseName(for: date, prefix: "Screenshot", timeZone: utc)
+                == FilenameBuilder.baseName(for: date, timeZone: utc))
+    }
+
+    @Test func baseNameUsesGivenPrefix() {
+        #expect(FilenameBuilder.baseName(for: date, prefix: "Screencast", timeZone: utc)
+                == "Screencast from 2026-11-17 23-12-04")
+    }
+
+    @Test func uniqueURLUsesPrefixAndExtensionWithConflictSuffixes() {
+        let folder = URL(fileURLWithPath: "/tmp/clips", isDirectory: true)
+        let taken: Set<String> = [
+            "/tmp/clips/Screencast from 2026-11-17 23-12-04.mp4",
+            "/tmp/clips/Screencast from 2026-11-17 23-12-04-1.mp4",
+        ]
+        let url = FilenameBuilder.uniqueURL(in: folder, date: date, prefix: "Screencast", pathExtension: "mp4",
+                                            timeZone: utc, fileExists: { taken.contains($0.path) })
+        #expect(url.path == "/tmp/clips/Screencast from 2026-11-17 23-12-04-2.mp4")
+    }
+
+    @Test func uniqueURLWithoutPrefixIsStillAScreenshot() {
+        let folder = URL(fileURLWithPath: "/tmp/shots", isDirectory: true)
+        let url = FilenameBuilder.uniqueURL(in: folder, date: date, timeZone: utc, fileExists: { _ in false })
+        #expect(url.lastPathComponent == "Screenshot from 2026-11-17 23-12-04.png")
+    }
 }

@@ -13,6 +13,10 @@ final class SettingsStore {
         static let hideMenuBarIcon = "hideMenuBarIcon"
         static let hotkeys = "hotkeys"
         static let hasSeenWelcome = "hasSeenWelcome"
+        static let screencastFolderPath = "screencastFolderPath"
+        static let recordSystemAudio = "recordSystemAudio"
+        static let recordMicrophone = "recordMicrophone"
+        static let screencastPreferH264 = "screencastPreferH264"
     }
 
     /// nil means the default (~/Pictures/Screenshots).
@@ -25,6 +29,33 @@ final class SettingsStore {
                 defaults.removeObject(forKey: Key.saveFolderPath)
             }
         }
+    }
+
+    /// nil means the default (~/Movies/Screencasts).
+    var screencastFolderPath: String? {
+        didSet {
+            guard screencastFolderPath != oldValue else { return }
+            if let screencastFolderPath, !screencastFolderPath.isEmpty {
+                defaults.set(screencastFolderPath, forKey: Key.screencastFolderPath)
+            } else {
+                defaults.removeObject(forKey: Key.screencastFolderPath)
+            }
+        }
+    }
+
+    /// Record the Mac's audio output in Screencasts (PrtSc's own sounds are excluded). Off by default.
+    var recordSystemAudio: Bool {
+        didSet { defaults.set(recordSystemAudio, forKey: Key.recordSystemAudio) }
+    }
+
+    /// Record the microphone in Screencasts. Off by default; turning it on needs microphone permission.
+    var recordMicrophone: Bool {
+        didSet { defaults.set(recordMicrophone, forKey: Key.recordMicrophone) }
+    }
+
+    /// Write H.264 instead of HEVC, for players and editors that can't read HEVC.
+    var screencastPreferH264: Bool {
+        didSet { defaults.set(screencastPreferH264, forKey: Key.screencastPreferH264) }
     }
 
     var includeWindowShadow: Bool {
@@ -70,6 +101,10 @@ final class SettingsStore {
         self.loginItem = loginItem
 
         saveFolderPath = defaults.string(forKey: Key.saveFolderPath).flatMap { $0.isEmpty ? nil : $0 }
+        screencastFolderPath = defaults.string(forKey: Key.screencastFolderPath).flatMap { $0.isEmpty ? nil : $0 }
+        recordSystemAudio = defaults.object(forKey: Key.recordSystemAudio) as? Bool ?? false
+        recordMicrophone = defaults.object(forKey: Key.recordMicrophone) as? Bool ?? false
+        screencastPreferH264 = defaults.object(forKey: Key.screencastPreferH264) as? Bool ?? false
         includeWindowShadow = defaults.object(forKey: Key.includeWindowShadow) as? Bool ?? false
         launchAtLogin = defaults.object(forKey: Key.launchAtLogin) as? Bool ?? true
         hideMenuBarIcon = defaults.object(forKey: Key.hideMenuBarIcon) as? Bool ?? false

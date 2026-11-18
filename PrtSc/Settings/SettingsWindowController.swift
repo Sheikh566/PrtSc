@@ -33,7 +33,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             window.isReleasedWhenClosed = false
             window.delegate = self
             let visible = NSScreen.main?.visibleFrame.height ?? 800
-            window.setContentSize(NSSize(width: 540, height: min(640, visible - 80)))
+            window.setContentSize(NSSize(width: 540, height: min(720, visible - 80)))
             window.center()
             self.window = window
         }

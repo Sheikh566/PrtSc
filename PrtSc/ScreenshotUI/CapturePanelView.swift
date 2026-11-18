@@ -1,8 +1,8 @@
 import PrtScCore
 import SwiftUI
 
-/// The Capture Panel: a Liquid Glass capsule with the Capture Mode buttons, the capture button and the
-/// Show Pointer toggle.
+/// The Capture Panel: a Liquid Glass capsule with the Capture Type toggle (Screenshot | Screencast), the
+/// Capture Mode buttons, the capture (or, for a Screencast, record) button and the Show Pointer toggle.
 struct CapturePanelView: View {
     let model: ScreenshotUIModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -10,6 +10,14 @@ struct CapturePanelView: View {
     var body: some View {
         GlassEffectContainer(spacing: 16) {
             HStack(spacing: 14) {
+                HStack(spacing: 6) {
+                    ForEach(CaptureType.allCases, id: \.self) { type in
+                        typeButton(type)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text("Capture Type"))
+
                 HStack(spacing: 6) {
                     ForEach(CaptureMode.allCases, id: \.self) { mode in
                         modeButton(mode)
@@ -26,8 +34,31 @@ struct CapturePanelView: View {
             .glassOrSolid(in: .capsule, reduceTransparency: reduceTransparency)
         }
         .padding(24)
+        .coordinateSpace(.named(panelTooltipSpace))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Capture Panel"))
+    }
+
+    @ViewBuilder
+    private func typeButton(_ type: CaptureType) -> some View {
+        let selected = model.captureType == type
+        let button = Button {
+            model.setCaptureType(type)
+        } label: {
+            Label(type.localizedTitle, systemImage: type.symbolName)
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .frame(width: 30, height: 26)
+        }
+        .panelTooltip(type.localizedTitle, shortcut: "V", id: .captureType(type.rawValue), model: model)
+        .accessibilityLabel(Text(type.localizedTitle))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+
+        if selected {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
     }
 
     @ViewBuilder
@@ -42,7 +73,7 @@ struct CapturePanelView: View {
                 .frame(width: 30, height: 26)
         }
         .disabled(mode == .window && !model.windowModeAvailable)
-        .help(mode.localizedTitle)
+        .panelTooltip(mode.localizedTitle, shortcut: mode.shortcutKey, id: .mode(mode.rawValue), model: model)
         .accessibilityLabel(Text(mode.localizedTitle))
         .accessibilityAddTraits(selected ? .isSelected : [])
 
@@ -53,18 +84,23 @@ struct CapturePanelView: View {
         }
     }
 
+    /// The camera button for a screenshot; a red record button for a Screencast.
+    @ViewBuilder
     private var captureButton: some View {
+        let recording = model.captureType == .screencast
         Button {
             model.capture()
         } label: {
-            Image(systemName: "camera.fill")
+            Image(systemName: recording ? "record.circle.fill" : "camera.fill")
                 .font(.title)
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.circle)
-        .help(Text("Capture"))
-        .accessibilityLabel(Text("Capture"))
+        .tint(recording ? .red : nil)
+        .panelTooltip(recording ? String(localized: "Record") : String(localized: "Capture"),
+                      shortcut: "↩", id: .capture, model: model)
+        .accessibilityLabel(recording ? Text("Record") : Text("Capture"))
     }
 
     @ViewBuilder
@@ -77,7 +113,7 @@ struct CapturePanelView: View {
                 .font(.title3)
                 .frame(width: 30, height: 26)
         }
-        .help(Text("Show Pointer"))
+        .panelTooltip(String(localized: "Show Pointer"), shortcut: "P", id: .pointer, model: model)
         .accessibilityLabel(Text("Show Pointer"))
         .accessibilityValue(Text(model.showPointer ? "On" : "Off"))
         .accessibilityAddTraits(model.showPointer ? .isSelected : [])
@@ -105,10 +141,12 @@ struct CloseButtonView: View {
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.circle)
-            .help(Text("Close"))
+            .panelTooltip(String(localized: "Close"), shortcut: "Esc", id: .close, source: .closeButton,
+                          model: model)
             .accessibilityLabel(Text("Close"))
         }
         .padding(16)
+        .coordinateSpace(.named(panelTooltipSpace))
     }
 }
 

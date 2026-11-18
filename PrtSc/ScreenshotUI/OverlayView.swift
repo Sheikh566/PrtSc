@@ -16,6 +16,7 @@ final class OverlayView: NSView {
 
     private var capsuleHost: NSHostingView<CapturePanelView>?
     private var closeHost: NSHostingView<CloseButtonView>?
+    private var tooltipHost: PassthroughHostingView<PanelTooltipView>?
     private let badgeHost = NSHostingView(rootView: WindowBadgeView())
 
     private var isDragging = false
@@ -50,6 +51,11 @@ final class OverlayView: NSView {
             let close = NSHostingView(rootView: CloseButtonView(model: model))
             addSubview(close)
             closeHost = close
+            // Added last so it draws above the capsule and the close button.
+            let tooltip = PassthroughHostingView(rootView: PanelTooltipView(model: model))
+            tooltip.isHidden = true
+            addSubview(tooltip)
+            tooltipHost = tooltip
         }
         addSubview(badgeHost)
         badgeHost.isHidden = true
@@ -79,6 +85,7 @@ final class OverlayView: NSView {
             let size = closeHost.fittingSize
             closeHost.frame = CGRect(x: 8, y: 8, width: size.width, height: size.height)
         }
+        layoutTooltip()
         if model.mode == .window, let id = model.selectedWindowID,
            let cell = model.cells(on: info).first(where: { $0.windowID == id }) {
             let size = badgeHost.fittingSize
@@ -89,6 +96,25 @@ final class OverlayView: NSView {
         } else {
             badgeHost.isHidden = true
         }
+    }
+
+    /// Places the hover tooltip centred on its control: above it for the Capture Panel, below it for the
+    /// close button, kept inside the display.
+    private func layoutTooltip() {
+        guard let tooltipHost else { return }
+        guard let tooltip = model.tooltip,
+              let host: NSView = tooltip.source == .capturePanel ? capsuleHost : closeHost else {
+            tooltipHost.isHidden = true
+            return
+        }
+        let size = tooltipHost.fittingSize
+        let gap: CGFloat = 4
+        // Hosting views are flipped like this view, so the anchor offsets straight from the host's origin.
+        let anchor = tooltip.anchor.offsetBy(dx: host.frame.minX, dy: host.frame.minY)
+        let x = min(max(anchor.midX - size.width / 2, 8), bounds.width - size.width - 8)
+        let y = tooltip.source == .capturePanel ? anchor.minY - size.height - gap : anchor.maxY + gap
+        tooltipHost.frame = CGRect(x: x.rounded(), y: y.rounded(), width: size.width, height: size.height)
+        tooltipHost.isHidden = false
     }
 
     // MARK: Coordinates
