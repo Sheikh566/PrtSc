@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Code-sign PrtSc.app inside-out (Sparkle's helpers and framework first, the app last)
-# with the hardened runtime.
+# Code-sign PrtSc.app inside-out (Sparkle's helpers and framework first, the app last),
+# with the hardened runtime when signing with a Developer ID.
 #
 # Usage: scripts/sign-app.sh <path/to/PrtSc.app> [identity]
-#   identity  a codesign identity, e.g. "Developer ID Application: Name (TEAMID)".
+#   identity  a codesign identity, e.g. "Developer ID Application: Name (TEAMID)", or a
+#             local self-signed one such as "PrtSc Local Signing".
 #             Default "-" = ad-hoc signing (no certificate, no timestamp).
 #
-# With a real identity this also adds a secure timestamp, which notarization requires.
+# A Developer ID also gets the hardened runtime and a secure timestamp (notarization needs both).
 # Entitlements come from PrtSc/Resources/PrtSc.entitlements.
 set -euo pipefail
 
@@ -22,10 +23,16 @@ entitlements="$repo_root/PrtSc/Resources/PrtSc.entitlements"
 
 [[ -d "$app" ]] || { echo "error: $app is not a directory" >&2; exit 66; }
 
-flags=(--force --options runtime --sign "$identity")
-if [[ "$identity" != "-" ]]; then
-  flags+=(--timestamp)
+flags=(--force --sign "$identity")
+if [[ "$identity" == "Developer ID Application:"* ]]; then
+  flags+=(--options runtime --timestamp)
 else
+  # Ad-hoc ("-") and local self-signed identities (e.g. "PrtSc Local Signing", see
+  # scripts/install-local.sh) have no Apple Team ID. Under the hardened runtime, library
+  # validation then refuses to load the embedded Sparkle.framework and the app aborts at
+  # launch ("different Team IDs"), and Apple's timestamp service rejects non-Apple
+  # certificates. Xcode likewise drops the hardened runtime for ad-hoc signing. Both are
+  # only required for notarization, which needs a Developer ID anyway.
   flags+=(--timestamp=none)
 fi
 
