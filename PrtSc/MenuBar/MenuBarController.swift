@@ -78,10 +78,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             item.menu = menu
             button.target = nil
             button.action = nil
-            let image = NSImage(systemSymbolName: "camera.viewfinder",
-                                accessibilityDescription: String(localized: "PrtSc"))
-            image?.isTemplate = true
-            button.image = image
+            button.image = MenuBarIcon.make()
             button.imagePosition = .imageOnly
             button.title = ""
             button.toolTip = String(localized: "PrtSc")
