@@ -103,6 +103,7 @@ Reset between runs if needed: `tccutil reset ScreenCapture io.github.sheikh566.P
 - [ ] The capture sound plays only when "Play sound effects" is enabled in System Settings > Sound, and stays silent when it is off.
 - [ ] A notification "Screenshot Captured" appears with a thumbnail.
 - [ ] Clicking the notification opens the image; its "Show in Finder" action reveals the file.
+- [ ] Clicking a notification (or its action) does NOT also open Settings; relaunching PrtSc from Finder while it runs still does.
 - [ ] With notifications denied, capture still saves and copies (no crash, no hang).
 - [ ] The saved file is added to recent documents (File > Open Recent in Preview).
 

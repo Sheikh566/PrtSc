@@ -3,6 +3,12 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: AppCoordinator?
+    private var reopenTask: Task<Void, Never>?
+
+    /// How long a reopen waits for a possible notification response before opening Settings.
+    private static let reopenSettleDelay: Duration = .milliseconds(400)
+    /// A notification click this recent means the reopen came from that click.
+    private static let notificationClickWindow: Duration = .milliseconds(1500)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Single instance: if another PrtSc is already running, hand over to it and quit.
@@ -35,8 +41,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Relaunching the app while it is running opens Settings (this is how a hidden menu bar icon is recovered).
+    ///
+    /// Clicking a Capture Notification sends the same reopen event, and the notification response can arrive
+    /// just before or just after it. So wait briefly and skip Settings if a notification was clicked: that
+    /// click opens the file instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openSettings()
+        reopenTask?.cancel()
+        reopenTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.reopenSettleDelay)
+            guard !Task.isCancelled, let self else { return }
+            self.reopenTask = nil
+            if NotificationActivity.respondedRecently(within: Self.notificationClickWindow) { return }
+            self.openSettings()
+        }
         return false
     }
 

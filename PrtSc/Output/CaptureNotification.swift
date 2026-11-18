@@ -107,6 +107,7 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate, S
         let path = response.notification.request.content.userInfo[CaptureNotifier.pathKey] as? String
         let action = response.actionIdentifier
         await MainActor.run {
+            NotificationActivity.noteResponse()
             guard let path else { return }
             let url = URL(fileURLWithPath: path)
             switch action {
@@ -118,5 +119,24 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate, S
                 break
             }
         }
+    }
+}
+
+/// When the user last clicked a PrtSc notification (or one of its actions).
+///
+/// Clicking a notification activates PrtSc, and because a menu bar app has no visible windows, macOS also
+/// sends it a "reopen" event, the same one as relaunching it from Finder. `AppDelegate` uses this to
+/// tell the two apart, so a notification click opens the file and not Settings.
+@MainActor
+enum NotificationActivity {
+    private static var lastResponse: ContinuousClock.Instant?
+
+    static func noteResponse() {
+        lastResponse = .now
+    }
+
+    static func respondedRecently(within interval: Duration) -> Bool {
+        guard let lastResponse else { return false }
+        return ContinuousClock.now - lastResponse < interval
     }
 }
