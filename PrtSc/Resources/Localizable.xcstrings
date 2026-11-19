@@ -244,13 +244,13 @@
         }
       }
     },
-    "Click to stop the Screencast": {
+    "Click to stop the Screencast. Right-click or Control-click to open the menu.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Click to stop the Screencast"
+            "value": "Click to stop the Screencast. Right-click or Control-click to open the menu."
           }
         }
       }
@@ -339,6 +339,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't register this shortcut; another app or macOS is using it."
+          }
+        }
+      }
+    },
+    "Display %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display %lld"
           }
         }
       }
@@ -563,24 +574,24 @@
         }
       }
     },
-    "Opens the screenshot UI": {
+    "Opens the Screenshot UI": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens the screenshot UI"
+            "value": "Opens the Screenshot UI"
           }
         }
       }
     },
-    "Opens the screenshot UI in Screencast mode, or stops the running recording": {
+    "Opens the Screenshot UI in Screencast mode, or stops the running recording": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens the screenshot UI in Screencast mode, or stops the running recording"
+            "value": "Opens the Screenshot UI in Screencast mode, or stops the running recording"
           }
         }
       }
@@ -750,13 +761,24 @@
         }
       }
     },
-    "Recording Screencast, %@. Click to stop.": {
+    "Recording Screencast, %@": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recording Screencast, %@. Click to stop."
+            "value": "Recording Screencast, %@"
+          }
+        }
+      }
+    },
+    "Recording shortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording shortcut"
           }
         }
       }
@@ -1267,13 +1289,13 @@
         }
       }
     },
-    "To get the icon back, open PrtSc again (for example from Spotlight or Launchpad); that opens these settings.": {
+    "To get the icon back, open PrtSc again (for example from Spotlight or the Applications folder). This opens these settings.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "To get the icon back, open PrtSc again (for example from Spotlight or Launchpad); that opens these settings."
+            "value": "To get the icon back, open PrtSc again (for example from Spotlight or the Applications folder). This opens these settings."
           }
         }
       }

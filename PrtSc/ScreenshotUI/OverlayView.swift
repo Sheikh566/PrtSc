@@ -14,8 +14,8 @@ final class OverlayView: NSView {
     private var windowImages: [UInt32: NSImage] = [:]
     private var windowImagesWithPointer: [UInt32: NSImage] = [:]
 
-    private var capsuleHost: NSHostingView<CapturePanelView>?
-    private var closeHost: NSHostingView<CloseButtonView>?
+    private var capsuleHost: ControlHostingView<CapturePanelView>?
+    private var closeHost: ControlHostingView<CloseButtonView>?
     private var tooltipHost: PassthroughHostingView<PanelTooltipView>?
     private let badgeHost = NSHostingView(rootView: WindowBadgeView())
 
@@ -43,14 +43,24 @@ final class OverlayView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(String(localized: "Screenshot area"))
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(accessibilityDisplayOptionsChanged(_:)),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
 
         if isPanelDisplay {
-            let capsule = NSHostingView(rootView: CapturePanelView(model: model))
-            addSubview(capsule)
+            let capsule = ControlHostingView(rootView: CapturePanelView(model: model) { [weak self] frame in
+                self?.capsuleHost?.controlFrame = frame
+                self?.refresh()
+            })
             capsuleHost = capsule
-            let close = NSHostingView(rootView: CloseButtonView(model: model))
-            addSubview(close)
+            addSubview(capsule)
+            let close = ControlHostingView(rootView: CloseButtonView(model: model) { [weak self] frame in
+                self?.closeHost?.controlFrame = frame
+                self?.refresh()
+            })
+            close.controlShape = AnyShape(Circle())
             closeHost = close
+            addSubview(close)
             // Added last so it draws above the capsule and the close button.
             let tooltip = PassthroughHostingView(rootView: PanelTooltipView(model: model))
             tooltip.isHidden = true
@@ -73,6 +83,10 @@ final class OverlayView: NSView {
         needsLayout = true
     }
 
+    @objc private func accessibilityDisplayOptionsChanged(_ notification: Notification) {
+        needsDisplay = true
+    }
+
     override func layout() {
         super.layout()
         if let capsuleHost {
@@ -84,6 +98,12 @@ final class OverlayView: NSView {
         if let closeHost {
             let size = closeHost.fittingSize
             closeHost.frame = CGRect(x: 8, y: 8, width: size.width, height: size.height)
+        }
+        if isPanelDisplay {
+            let frames = [capsuleHost?.visibleControlFrame, closeHost?.visibleControlFrame]
+                .compactMap { $0 }.filter { !$0.isEmpty }
+                .map { $0.offsetBy(dx: info.frame.minX, dy: info.frame.minY) }
+            model.setChromeFrames(frames)
         }
         layoutTooltip()
         if model.mode == .window, let id = model.selectedWindowID,
@@ -98,8 +118,7 @@ final class OverlayView: NSView {
         }
     }
 
-    /// Places the hover tooltip centred on its control: above it for the Capture Panel, below it for the
-    /// close button, kept inside the display.
+    /// Places the hover tooltip centred on its control, above the capsule or below the close button.
     private func layoutTooltip() {
         guard let tooltipHost else { return }
         guard let tooltip = model.tooltip,
@@ -112,7 +131,16 @@ final class OverlayView: NSView {
         // Hosting views are flipped like this view, so the anchor offsets straight from the host's origin.
         let anchor = tooltip.anchor.offsetBy(dx: host.frame.minX, dy: host.frame.minY)
         let x = min(max(anchor.midX - size.width / 2, 8), bounds.width - size.width - 8)
-        let y = tooltip.source == .capturePanel ? anchor.minY - size.height - gap : anchor.maxY + gap
+        let y: CGFloat
+        if tooltip.source == .capturePanel {
+            guard let capsule = capsuleHost?.visibleControlFrame, !capsule.isEmpty else {
+                tooltipHost.isHidden = true
+                return
+            }
+            y = capsule.minY - size.height - gap
+        } else {
+            y = anchor.maxY + gap
+        }
         tooltipHost.frame = CGRect(x: x.rounded(), y: y.rounded(), width: size.width, height: size.height)
         tooltipHost.isHidden = false
     }
@@ -186,20 +214,38 @@ final class OverlayView: NSView {
         ]
         let textSize = text.size(withAttributes: attributes)
         let pill = CGSize(width: textSize.width + 20, height: textSize.height + 8)
-        let union = model.editor.bounds
+        let available = model.editor.bounds.insetBy(dx: 4, dy: 4)
+        let x = min(max(selection.midX - pill.width / 2, available.minX), available.maxX - pill.width)
+        let chrome = model.chromeFrames
 
         // Below the selection, else above, else inside — decided in global coordinates so every display agrees.
-        var origin = CGPoint(x: selection.midX - pill.width / 2, y: selection.maxY + 14)
-        if origin.y + pill.height > union.maxY - 4 {
-            origin.y = selection.minY - 14 - pill.height
-            if origin.y < union.minY + 4 { origin.y = selection.maxY - pill.height - 12 }
+        let below = selection.maxY + 14
+        let above = selection.minY - 14 - pill.height
+        let inside = max(selection.maxY - pill.height - 12, available.minY)
+        // If all three collide, try just outside the chrome, closest to the selection first.
+        let edges: [CGFloat] = chrome.flatMap { [$0.minY - pill.height - 4, $0.maxY + 4] }
+        let centredY = selection.midY - pill.height / 2
+        let alternatives = edges.sorted { abs($0 - centredY) < abs($1 - centredY) }
+        let candidates = ([below, above, inside] + alternatives).map {
+            CGRect(x: x, y: $0, width: pill.width, height: pill.height)
         }
-        origin.x = min(max(origin.x, union.minX + 4), union.maxX - pill.width - 4)
+        guard let position = candidates.first(where: { candidate in
+            available.contains(candidate) && !chrome.contains(where: { $0.intersects(candidate) })
+        }) else { return }
 
-        let rect = localRect(CGRect(origin: origin, size: pill))
+        let rect = localRect(position)
         guard rect.intersects(bounds) else { return }
-        NSColor.black.withAlphaComponent(0.65).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2).fill()
+        let workspace = NSWorkspace.shared
+        let solid = workspace.accessibilityDisplayShouldReduceTransparency
+            || workspace.accessibilityDisplayShouldIncreaseContrast
+        let shape = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+        NSColor.black.withAlphaComponent(solid ? 1 : 0.65).setFill()
+        shape.fill()
+        if solid {
+            NSColor.white.setStroke()
+            shape.lineWidth = 1
+            shape.stroke()
+        }
         text.draw(at: CGPoint(x: rect.minX + 10, y: rect.minY + 4), withAttributes: attributes)
     }
 
@@ -334,7 +380,7 @@ final class OverlayView: NSView {
 
     private func updateCursor(for event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
-        if [capsuleHost, closeHost].contains(where: { $0?.frame.contains(local) == true }) {
+        if capsuleHost?.containsControl(at: local) == true || closeHost?.containsControl(at: local) == true {
             NSCursor.arrow.set()
             return
         }
@@ -366,5 +412,23 @@ final class OverlayView: NSView {
         case .bottomRight: .frameResize(position: .bottomRight, directions: .all)
         }
         cursor.set()
+    }
+}
+
+/// A hosted control whose shadow padding passes mouse events through to the overlay.
+private final class ControlHostingView<Content: View>: NSHostingView<Content> {
+    var controlFrame = CGRect.zero
+    var controlShape = AnyShape(Capsule())
+
+    var visibleControlFrame: CGRect { convert(controlFrame, to: superview) }
+
+    /// The hit-test point is in the superview's coordinates.
+    func containsControl(at point: CGPoint) -> Bool {
+        let rect = visibleControlFrame
+        return !rect.isEmpty && controlShape.path(in: rect).contains(point)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        containsControl(at: point) ? super.hitTest(point) : nil
     }
 }

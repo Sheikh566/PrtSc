@@ -283,7 +283,7 @@ struct SettingsView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Toggle("Hide menu bar icon", isOn: $settings.hideMenuBarIcon)
-                Text("To get the icon back, open PrtSc again (for example from Spotlight or Launchpad); that opens these settings.")
+                Text("To get the icon back, open PrtSc again (for example from Spotlight or the Applications folder). This opens these settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

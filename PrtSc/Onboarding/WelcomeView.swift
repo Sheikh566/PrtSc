@@ -44,6 +44,7 @@ struct WelcomeView: View {
     let settings: SettingsStore
     let relaunch: () -> Void
     let close: () -> Void
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -105,12 +106,19 @@ struct WelcomeView: View {
                 .foregroundStyle(.secondary)
 
             HStack {
-                Button("Relaunch PrtSc", action: relaunch)
-                    .buttonStyle(.glass)
+                if !model.screenRecordingGranted {
+                    Button("Relaunch PrtSc", action: relaunch)
+                        .buttonStyle(.glass)
+                }
                 Spacer()
-                Button("Done", action: close)
-                    .buttonStyle(.glassProminent)
-                    .keyboardShortcut(.defaultAction)
+                if model.screenRecordingGranted {
+                    Button("Done", action: close)
+                        .buttonStyle(.glassProminent)
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Done", action: close)
+                        .buttonStyle(.glass)
+                }
             }
         }
         .padding(24)
@@ -155,7 +163,7 @@ struct WelcomeView: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glassOrSolid(in: RoundedRectangle(cornerRadius: 16), reduceTransparency: reduceTransparency)
         .accessibilityElement(children: .contain)
     }
 }

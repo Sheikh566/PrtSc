@@ -12,7 +12,7 @@ struct PanelTooltip: Equatable, Identifiable {
 
     /// Which hosted accessory the control lives in; decides where the tooltip is placed.
     enum Source: Equatable {
-        case capturePanel   // shown above the control
+        case capturePanel   // shown above the capsule
         case closeButton    // shown below the control
     }
 
@@ -44,14 +44,20 @@ private struct PanelTooltipModifier: ViewModifier {
     let model: ScreenshotUIModel
 
     @State private var frame: CGRect = .zero
+    @State private var latestTooltip: PanelTooltip?
     @State private var hoverTask: Task<Void, Never>?
 
     private static let delay: Duration = .milliseconds(450)
 
     func body(content: Content) -> some View {
+        let tooltip = PanelTooltip(id: id, title: title, shortcut: shortcut, source: source, anchor: frame)
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(panelTooltipSpace)) } action: {
                 frame = $0
+            }
+            .onChange(of: tooltip, initial: true) { _, newTooltip in
+                latestTooltip = newTooltip
+                if model.tooltip?.id == id { model.setTooltip(newTooltip) }
             }
             .onHover { hovering in
                 hoverTask?.cancel()
@@ -59,8 +65,7 @@ private struct PanelTooltipModifier: ViewModifier {
                     hoverTask = Task { @MainActor in
                         try? await Task.sleep(for: Self.delay)
                         guard !Task.isCancelled else { return }
-                        model.setTooltip(PanelTooltip(id: id, title: title, shortcut: shortcut,
-                                                      source: source, anchor: frame))
+                        if let latestTooltip { model.setTooltip(latestTooltip) }
                     }
                 } else {
                     hoverTask = nil

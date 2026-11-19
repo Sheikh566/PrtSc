@@ -83,6 +83,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             button.title = ""
             button.toolTip = String(localized: "PrtSc")
             button.setAccessibilityLabel(String(localized: "PrtSc"))
+            button.setAccessibilityHelp(nil)
             return
         }
 
@@ -97,7 +98,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         dot?.isTemplate = false
         button.image = dot
         button.imagePosition = .imageLeading
-        button.toolTip = String(localized: "Click to stop the Screencast")
+        let help = String(localized: "Click to stop the Screencast. Right-click or Control-click to open the menu.")
+        button.toolTip = help
+        button.setAccessibilityHelp(help)
         updateClock(startDate: start)
 
         // Tick on the second boundaries of the recording, so the text changes when the second does.
@@ -118,7 +121,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         button.attributedTitle = NSAttributedString(
             string: " " + text,
             attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)])
-        button.setAccessibilityLabel(String(localized: "Recording Screencast, \(text). Click to stop."))
+        button.setAccessibilityLabel(String(localized: "Recording Screencast, \(text)"))
     }
 
     /// While recording: click stops the Screencast; right-click or ⌃-click opens the menu instead.
@@ -154,7 +157,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let recording = recordingStartDate != nil
         if recording {
-            menu.addItem(item(String(localized: "Stop Screencast"), #selector(stopScreencast)))
+            menu.addItem(captureItem(.screencast, selector: #selector(stopScreencast),
+                                     title: String(localized: "Stop Screencast")))
             menu.addItem(.separator())
         }
         let takeScreenshot = captureItem(.openScreenshotUI, selector: #selector(takeScreenshot))
@@ -186,13 +190,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     /// A capture item with its current shortcut as a key equivalent, or as plain text when the menu can't express it.
-    private func captureItem(_ action: HotkeyAction, selector: Selector) -> NSMenuItem {
+    private func captureItem(_ action: HotkeyAction, selector: Selector, title: String? = nil) -> NSMenuItem {
+        let title = title ?? action.title
         let combo = settings.hotkeys.bindings[action]
         if let combo, let key = KeyCodes.menuKeyEquivalent(for: combo.keyCode) {
-            return item(action.title, selector, key: key, modifiers: KeyCodes.menuModifierMask(combo.modifiers))
+            return item(title, selector, key: key, modifiers: KeyCodes.menuModifierMask(combo.modifiers))
         }
-        let title = combo.map { "\(action.title)  \($0.displayString)" } ?? action.title
-        return item(title, selector)
+        return item(combo.map { "\(title)  \($0.displayString)" } ?? title, selector)
     }
 
     @objc private func takeScreenshot() { onTakeScreenshot?() }

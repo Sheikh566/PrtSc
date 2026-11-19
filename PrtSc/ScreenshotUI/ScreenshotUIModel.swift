@@ -27,6 +27,8 @@ final class ScreenshotUIModel {
     private(set) var selectedWindowID: UInt32?
     /// The hover tooltip for a Capture Panel control (name + keyboard shortcut), or nil.
     private(set) var tooltip: PanelTooltip?
+    /// The Capture Panel and close button frames in global CG points, shared by all overlays.
+    @ObservationIgnored private(set) var chromeFrames: [CGRect] = []
 
     @ObservationIgnored private let session: SessionState
     @ObservationIgnored var onChange: (() -> Void)?
@@ -99,8 +101,17 @@ final class ScreenshotUIModel {
     // MARK: Screen and Window choice
 
     func selectDisplay(_ displayID: UInt32) {
-        guard displayID != selectedDisplayID, displays.contains(where: { $0.displayID == displayID }) else { return }
+        guard displayID != selectedDisplayID,
+              let index = displays.firstIndex(where: { $0.displayID == displayID }) else { return }
         selectedDisplayID = displayID
+        let screen = NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+        }
+        if let name = screen?.localizedName, !name.isEmpty {
+            announce(name)
+        } else {
+            announce(String(localized: "Display \(index + 1)"))
+        }
         notify()
     }
 
@@ -350,6 +361,12 @@ final class ScreenshotUIModel {
     }
 
     // MARK: Geometry helpers
+
+    func setChromeFrames(_ frames: [CGRect]) {
+        guard chromeFrames != frames else { return }
+        chromeFrames = frames
+        notify()
+    }
 
     /// Window Picker cells for every display: each window goes to the display that shows most of it
     /// (`DisplayGeometry.displayShowingMost`), laid out in an Overview-style grid that leaves room for the

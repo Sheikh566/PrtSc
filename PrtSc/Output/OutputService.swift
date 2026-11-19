@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 final class OutputService: CaptureSink {
     static let shutterSoundURL = URL(fileURLWithPath:
         "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/Screen Capture.aif")
+    private nonisolated static let thumbnailMaxPixelSize = 640
 
     private let settings: SettingsStore
     private let notifier: CaptureNotifier
@@ -94,7 +95,10 @@ final class OutputService: CaptureSink {
         }
 
         // 4. CaptureNotification.
-        await notifier.post(pngData: encoded.png, fileURL: savedURL)
+        let thumbnail = await Task.detached(priority: .utility) {
+            Self.thumbnailPNG(forScreenshot: encoded.png) ?? encoded.png
+        }.value
+        await notifier.post(thumbnailPNG: thumbnail, fileURL: savedURL)
 
         if let saveError {
             presentAlert(message: saveError.localizedDescription, copiedToClipboard: true)
@@ -111,35 +115,46 @@ final class OutputService: CaptureSink {
     /// PNG via ImageIO keeps the image's colour space (ICC profile); DPI = 72 × scale.
     /// The TIFF carries the same Retina sizing (see `ImageEncoding.tiffData`).
     nonisolated static func encode(_ capture: CapturedImage) -> Encoded? {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
-            return nil
-        }
         let dpi = ImageMetadata.dpi(forScale: capture.scale)
         let properties: [CFString: Any] = [
             kCGImagePropertyDPIWidth: dpi,
             kCGImagePropertyDPIHeight: dpi,
         ]
-        CGImageDestinationAddImage(destination, capture.image, properties as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return Encoded(png: data as Data, tiff: ImageEncoding.tiffData(for: capture))
+        guard let png = pngData(for: capture.image, properties: properties as CFDictionary) else { return nil }
+        return Encoded(png: png, tiff: ImageEncoding.tiffData(for: capture))
     }
 
-    // MARK: - Screencast thumbnail
+    // MARK: - Capture Notification thumbnails
 
-    /// The first frame of a video as PNG data (at most 640 px wide), nil if it can't be read.
+    /// A screenshot thumbnail as PNG data, limited to 640 px on the long side.
+    private nonisolated static func thumbnailPNG(forScreenshot png: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(png as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailMaxPixelSize,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
+        return pngData(for: thumbnail)
+    }
+
+    /// The first frame of a video as PNG data (at most 640 px on the long side), nil if it can't be read.
     nonisolated static func thumbnailPNG(forVideoAt url: URL) async -> Data? {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 640)
+        generator.maximumSize = CGSize(width: thumbnailMaxPixelSize, height: thumbnailMaxPixelSize)
         // The first sample may not sit exactly at time zero.
         generator.requestedTimeToleranceBefore = .positiveInfinity
         generator.requestedTimeToleranceAfter = .positiveInfinity
         guard let (image, _) = try? await generator.image(at: .zero) else { return nil }
+        return pngData(for: image)
+    }
+
+    private nonisolated static func pngData(for image: CGImage, properties: CFDictionary? = nil) -> Data? {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
         else { return nil }
-        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationAddImage(destination, image, properties)
         return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 

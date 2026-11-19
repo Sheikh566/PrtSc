@@ -5,6 +5,7 @@ import SwiftUI
 /// Capture Mode buttons, the capture (or, for a Screencast, record) button and the Show Pointer toggle.
 struct CapturePanelView: View {
     let model: ScreenshotUIModel
+    let onControlFrameChange: (CGRect) -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
@@ -32,6 +33,9 @@ struct CapturePanelView: View {
             }
             .padding(10)
             .glassOrSolid(in: .capsule, reduceTransparency: reduceTransparency)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(panelTooltipSpace)) } action: {
+                onControlFrameChange($0)
+            }
         }
         .padding(24)
         .coordinateSpace(.named(panelTooltipSpace))
@@ -129,6 +133,7 @@ struct CapturePanelView: View {
 /// The separate round close button at the top-left of the Capture Panel's display.
 struct CloseButtonView: View {
     let model: ScreenshotUIModel
+    let onControlFrameChange: (CGRect) -> Void
 
     var body: some View {
         GlassEffectContainer {
@@ -144,6 +149,9 @@ struct CloseButtonView: View {
             .panelTooltip(String(localized: "Close"), shortcut: "Esc", id: .close, source: .closeButton,
                           model: model)
             .accessibilityLabel(Text("Close"))
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(panelTooltipSpace)) } action: {
+                onControlFrameChange($0)
+            }
         }
         .padding(16)
         .coordinateSpace(.named(panelTooltipSpace))
@@ -152,14 +160,12 @@ struct CloseButtonView: View {
 
 /// The check-mark badge on the selected window in the Window Picker.
 struct WindowBadgeView: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     var body: some View {
         Image(systemName: "checkmark")
             .font(.title3.weight(.bold))
-            .foregroundStyle(.primary)
+            .foregroundStyle(.white)
             .frame(width: 40, height: 40)
-            .glassOrSolid(in: .circle, reduceTransparency: reduceTransparency)
+            .background(Color(nsColor: .controlAccentColor), in: .circle)
             .padding(8)
             .accessibilityHidden(true)
     }
@@ -168,13 +174,13 @@ struct WindowBadgeView: View {
 extension View {
     /// Liquid Glass, or an opaque background when Reduce Transparency is on.
     @ViewBuilder
-    fileprivate func glassOrSolid<S: Shape>(in shape: S, reduceTransparency: Bool) -> some View {
+    func glassOrSolid<S: Shape>(in shape: S, reduceTransparency: Bool) -> some View {
         if reduceTransparency {
             self
                 .background(Color(nsColor: .windowBackgroundColor), in: shape)
                 .overlay { shape.stroke(Color.primary.opacity(0.25), lineWidth: 1) }
         } else {
-            self.glassEffect(.regular.interactive(), in: shape)
+            self.glassEffect(.regular, in: shape)
         }
     }
 }

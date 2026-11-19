@@ -14,6 +14,7 @@ struct HotkeyRecorderView: View {
     private var isRecording: Bool { session.activeAction == action }
 
     var body: some View {
+        let canClear = combo != nil && !isRecording
         HStack(spacing: 6) {
             Button {
                 if isRecording {
@@ -31,20 +32,22 @@ struct HotkeyRecorderView: View {
             .buttonStyle(.bordered)
             .tint(isRecording ? .accentColor : nil)
             .accessibilityLabel(Text("Shortcut for \(action.settingsTitle)"))
-            .accessibilityValue(Text(combo?.displayString ?? String(localized: "Not set")))
+            .accessibilityValue(isRecording ? Text("Recording shortcut") : Text(label))
             .accessibilityHint(Text("Click, then press the new shortcut"))
 
-            if combo != nil && !isRecording {
-                Button {
-                    combo = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(Text("Clear shortcut for \(action.settingsTitle)"))
-                .help(Text("Clear shortcut"))
+            Button {
+                combo = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
             }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(Text("Clear shortcut for \(action.settingsTitle)"))
+            .help(Text("Clear shortcut"))
+            .disabled(!canClear)
+            .allowsHitTesting(canClear)
+            .accessibilityHidden(!canClear)
+            .opacity(canClear ? 1 : 0)
         }
         .onDisappear {
             if isRecording { session.cancel() }
@@ -124,8 +127,12 @@ final class HotkeyRecordingSession {
             return true
         }
         guard !modifiers.isEmpty || KeyCodes.isFunctionKey(keyCode) else {
-            hint = String(localized: "Add a modifier key")
+            let message = String(localized: "Add a modifier key")
+            hint = message
             NSSound.beep()
+            NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                                 userInfo: [.announcement: message,
+                                            .priority: NSAccessibilityPriorityLevel.high.rawValue])
             return true
         }
         finish(with: KeyCombo(keyCode: keyCode, modifiers: modifiers))

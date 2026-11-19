@@ -23,10 +23,10 @@ extension HotkeyAction {
 
     var settingsSubtitle: String {
         switch self {
-        case .openScreenshotUI: String(localized: "Opens the screenshot UI")
+        case .openScreenshotUI: String(localized: "Opens the Screenshot UI")
         case .instantScreen: String(localized: "Captures the display under the pointer immediately")
         case .instantWindow: String(localized: "Captures the frontmost window immediately")
-        case .screencast: String(localized: "Opens the screenshot UI in Screencast mode, or stops the running recording")
+        case .screencast: String(localized: "Opens the Screenshot UI in Screencast mode, or stops the running recording")
         }
     }
 }

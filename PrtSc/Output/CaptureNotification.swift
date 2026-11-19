@@ -28,12 +28,12 @@ final class CaptureNotifier {
 
     /// The screenshot notification.
     /// - Parameters:
-    ///   - pngData: the screenshot, used for the thumbnail (a temp copy; attachments move files).
+    ///   - thumbnailPNG: the screenshot thumbnail (written to a temp copy; attachments move files).
     ///   - fileURL: the saved file, nil if saving failed.
-    func post(pngData: Data, fileURL: URL?) async {
+    func post(thumbnailPNG: Data, fileURL: URL?) async {
         await post(title: String(localized: "Screenshot Captured"),
                    body: String(localized: "You can paste the image from the clipboard"),
-                   thumbnailPNG: pngData,
+                   thumbnailPNG: thumbnailPNG,
                    thumbnailName: fileURL?.lastPathComponent ?? "Screenshot.png",
                    fileURL: fileURL)
     }
@@ -61,8 +61,8 @@ final class CaptureNotifier {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.categoryIdentifier = Self.categoryIdentifier
         if let fileURL {
+            content.categoryIdentifier = Self.categoryIdentifier
             content.userInfo = [Self.pathKey: fileURL.path]
         }
 
