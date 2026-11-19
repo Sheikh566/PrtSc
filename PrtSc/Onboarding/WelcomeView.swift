@@ -44,14 +44,22 @@ struct WelcomeView: View {
     let settings: SettingsStore
     let relaunch: () -> Void
     let close: () -> Void
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var grantAnimation: Animation? {
+        reduceMotion ? nil : .snappy(duration: 0.25)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 14) {
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(.tint)
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 56, height: 56)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Welcome to PrtSc")
@@ -61,45 +69,34 @@ struct WelcomeView: View {
                 }
             }
 
-            GlassEffectContainer(spacing: 12) {
-                VStack(spacing: 12) {
-                    permissionCard(
-                        symbol: "record.circle",
-                        title: String(localized: "Screen Recording"),
-                        detail: String(localized: "Required. macOS asks for this permission before any app can capture other windows or the display."),
-                        granted: model.screenRecordingGranted
-                    ) {
-                        Button("Grant Access") { model.permissions.requestScreenRecording() }
-                            .buttonStyle(.glassProminent)
-                        Button("Open System Settings") { model.permissions.openScreenRecordingSettings() }
-                            .buttonStyle(.glass)
+            VStack(spacing: 12) {
+                permissionCard(
+                    symbol: "record.circle",
+                    title: String(localized: "Screen Recording"),
+                    detail: String(localized: "Required. macOS asks for this permission before any app can capture other windows or the display."),
+                    granted: model.screenRecordingGranted
+                ) {
+                    Button("Grant Access") { model.permissions.requestScreenRecording() }
+                        .buttonStyle(.borderedProminent)
+                    Button("Open System Settings") { model.permissions.openScreenRecordingSettings() }
+                        .buttonStyle(.bordered)
+                }
+                permissionCard(
+                    symbol: "bell.badge",
+                    title: String(localized: "Notifications"),
+                    detail: String(localized: "Optional. Shows a banner with a thumbnail after each capture; click it to open the file."),
+                    granted: model.notificationsGranted
+                ) {
+                    Button(model.notificationStatus == .notDetermined
+                           ? String(localized: "Allow Notifications")
+                           : String(localized: "Open System Settings")) {
+                        model.requestNotifications()
                     }
-                    permissionCard(
-                        symbol: "bell.badge",
-                        title: String(localized: "Notifications"),
-                        detail: String(localized: "Optional. Shows a banner with a thumbnail after each capture; click it to open the file."),
-                        granted: model.notificationsGranted
-                    ) {
-                        Button(model.notificationStatus == .notDetermined
-                               ? String(localized: "Allow Notifications")
-                               : String(localized: "Open System Settings")) {
-                            model.requestNotifications()
-                        }
-                        .buttonStyle(.glass)
-                    }
+                    .buttonStyle(.bordered)
                 }
             }
 
-            HStack(spacing: 8) {
-                Image(systemName: "keyboard")
-                    .accessibilityHidden(true)
-                if let combo = settings.hotkeys.bindings[.openScreenshotUI] {
-                    Text("Press \(combo.displayString) to take a screenshot.")
-                } else {
-                    Text("Set a shortcut for taking screenshots in Settings.")
-                }
-            }
-            .font(.callout)
+            shortcutsRow
 
             Text("After granting Screen Recording, macOS may ask you to quit and reopen PrtSc before it takes effect.")
                 .font(.caption)
@@ -108,20 +105,22 @@ struct WelcomeView: View {
             HStack {
                 if !model.screenRecordingGranted {
                     Button("Relaunch PrtSc", action: relaunch)
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
+                        .transition(reduceMotion ? .identity : .opacity)
                 }
                 Spacer()
                 if model.screenRecordingGranted {
                     Button("Done", action: close)
-                        .buttonStyle(.glassProminent)
+                        .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 } else {
                     Button("Done", action: close)
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                 }
             }
+            .animation(grantAnimation, value: model.screenRecordingGranted)
         }
-        .padding(24)
+        .padding(EdgeInsets(top: 34, leading: 24, bottom: 24, trailing: 24))
         .frame(width: 520)
         .task {
             while !Task.isCancelled {
@@ -134,11 +133,45 @@ struct WelcomeView: View {
         }
     }
 
+    private var shortcutsRow: some View {
+        let screenshotCombo = settings.hotkeys.bindings[.openScreenshotUI]
+        let screencastCombo = settings.hotkeys.bindings[.screencast]
+        return HStack(spacing: 10) {
+            Image(systemName: "keyboard")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            if screenshotCombo != nil || screencastCombo != nil {
+                HStack(spacing: 16) {
+                    if let screenshotCombo {
+                        shortcutHint(title: String(localized: "Screenshot"), combo: screenshotCombo)
+                    }
+                    if let screencastCombo {
+                        shortcutHint(title: String(localized: "Screencast"), combo: screencastCombo)
+                    }
+                }
+            } else {
+                Text("Set a shortcut for taking screenshots in Settings.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.callout)
+    }
+
+    private func shortcutHint(title: String, combo: KeyCombo) -> some View {
+        HStack(spacing: 6) {
+            KeycapView(combo.displayString)
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func permissionCard<Actions: View>(
         symbol: String, title: String, detail: String, granted: Bool,
         @ViewBuilder actions: () -> Actions
     ) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        let symbolTransition: ContentTransition = reduceMotion ? .identity : .symbolEffect(.replace)
+        return HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.title2)
                 .frame(width: 28)
@@ -148,10 +181,14 @@ struct WelcomeView: View {
                 HStack {
                     Text(title).font(.headline)
                     Spacer()
-                    Label(granted ? String(localized: "Granted") : String(localized: "Not granted"),
-                          systemImage: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(granted ? Color.green : Color.orange)
+                    HStack(spacing: 4) {
+                        Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .contentTransition(symbolTransition)
+                        Text(granted ? String(localized: "Granted") : String(localized: "Not granted"))
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(granted ? Color.green : Color.orange)
+                    .accessibilityElement(children: .combine)
                 }
                 Text(detail)
                     .font(.callout)
@@ -159,11 +196,23 @@ struct WelcomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if !granted {
                     HStack { actions() }
+                        .transition(reduceMotion ? .identity : .opacity)
                 }
             }
         }
         .padding(14)
-        .glassOrSolid(in: RoundedRectangle(cornerRadius: 16), reduceTransparency: reduceTransparency)
+        .background(
+            Color(nsColor: .controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    Color(nsColor: .separatorColor).opacity(contrast == .increased ? 1 : 0.7),
+                    lineWidth: 1
+                )
+        }
+        .animation(grantAnimation, value: granted)
         .accessibilityElement(children: .contain)
     }
 }

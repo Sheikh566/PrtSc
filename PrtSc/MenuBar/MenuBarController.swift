@@ -7,14 +7,20 @@ import PrtScCore
 ///
 /// While a Screencast is recording the status item is the Recording Indicator (a red dot and the elapsed
 /// time): a click stops the recording, and a right-click (or ⌃-click) opens the menu, whose first item is
-/// then "Stop Screencast".
+/// then "Stop Screencast". While the recorder is finalizing the file, the indicator shows "Stopping…"
+/// without a timer and is not clickable.
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
+    enum IndicatorState: Equatable {
+        case idle
+        case recording(startDate: Date)
+        case stopping
+    }
+
     private let settings: SettingsStore
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
-    /// When the running Screencast started; nil when none is recording.
-    private var recordingStartDate: Date?
+    private var indicatorState: IndicatorState = .idle
     private var clockTask: Task<Void, Never>?
 
     var onTakeScreenshot: (@MainActor () -> Void)?
@@ -45,7 +51,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         self.menu = menu
         statusItem = item
         rebuildMenu(menu)
-        applyRecordingState()
+        applyIndicatorState()
 
         observeForever { [weak self] in
             guard let self else { return }
@@ -55,26 +61,34 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     // MARK: - Recording Indicator
 
-    /// Shows the Recording Indicator for a Screencast that started at `startDate`, or restores the normal
-    /// status item when nil.
-    func setRecording(startDate: Date?) {
-        guard recordingStartDate != startDate else { return }
-        recordingStartDate = startDate
+    /// Updates the status item to match the Screencast recorder's state.
+    func setIndicatorState(_ state: IndicatorState) {
+        guard indicatorState != state else { return }
+        indicatorState = state
         updateVisibility(hidden: settings.hideMenuBarIcon)
-        applyRecordingState()
+        applyIndicatorState()
     }
 
-    /// The indicator shows even when the menu bar icon is hidden, for as long as the recording runs.
+    /// The indicator shows even when the menu bar icon is hidden, for as long as the recording runs or stops.
     private func updateVisibility(hidden: Bool) {
-        statusItem?.isVisible = !hidden || recordingStartDate != nil
+        statusItem?.isVisible = !hidden || indicatorState != .idle
     }
 
-    private func applyRecordingState() {
+    private func recordingDotImage() -> NSImage? {
+        let dot = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10.5, weight: .regular)
+                .applying(NSImage.SymbolConfiguration(paletteColors: [.systemRed])))
+        dot?.isTemplate = false
+        return dot
+    }
+
+    private func applyIndicatorState() {
         clockTask?.cancel()
         clockTask = nil
         guard let item = statusItem, let button = item.button else { return }
 
-        guard let start = recordingStartDate else {
+        switch indicatorState {
+        case .idle:
             item.menu = menu
             button.target = nil
             button.action = nil
@@ -84,34 +98,44 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             button.toolTip = String(localized: "PrtSc")
             button.setAccessibilityLabel(String(localized: "PrtSc"))
             button.setAccessibilityHelp(nil)
-            return
-        }
 
-        // No menu while recording: a click stops (see `statusButtonClicked`).
-        item.menu = nil
-        button.target = self
-        button.action = #selector(statusButtonClicked)
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        let dot = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 9, weight: .regular)
-                .applying(NSImage.SymbolConfiguration(paletteColors: [.systemRed])))
-        dot?.isTemplate = false
-        button.image = dot
-        button.imagePosition = .imageLeading
-        let help = String(localized: "Click to stop the Screencast. Right-click or Control-click to open the menu.")
-        button.toolTip = help
-        button.setAccessibilityHelp(help)
-        updateClock(startDate: start)
+        case let .recording(start):
+            // No menu while recording: a click stops (see `statusButtonClicked`).
+            item.menu = nil
+            button.target = self
+            button.action = #selector(statusButtonClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.image = recordingDotImage()
+            button.imagePosition = .imageLeading
+            let help = String(localized: "Click to stop the Screencast. Right-click or Control-click to open the menu.")
+            button.toolTip = help
+            button.setAccessibilityHelp(help)
+            updateClock(startDate: start)
 
-        // Tick on the second boundaries of the recording, so the text changes when the second does.
-        clockTask = Task { [weak self] in
-            while !Task.isCancelled {
-                let elapsed = Date().timeIntervalSince(start)
-                let untilNextSecond = 1 - elapsed.truncatingRemainder(dividingBy: 1)
-                try? await Task.sleep(for: .milliseconds(Int(untilNextSecond * 1000) + 20))
-                guard !Task.isCancelled else { return }
-                self?.updateClock(startDate: start)
+            // Tick on the second boundaries of the recording, so the text changes when the second does.
+            clockTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    let elapsed = Date().timeIntervalSince(start)
+                    let untilNextSecond = 1 - elapsed.truncatingRemainder(dividingBy: 1)
+                    try? await Task.sleep(for: .milliseconds(Int(untilNextSecond * 1000) + 20))
+                    guard !Task.isCancelled else { return }
+                    self?.updateClock(startDate: start)
+                }
             }
+
+        case .stopping:
+            item.menu = nil
+            button.target = nil
+            button.action = nil
+            button.image = recordingDotImage()
+            button.imagePosition = .imageLeading
+            let stopping = String(localized: "Stopping…")
+            button.attributedTitle = NSAttributedString(
+                string: " " + stopping,
+                attributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)])
+            button.toolTip = stopping
+            button.setAccessibilityLabel(String(localized: "Stopping Screencast"))
+            button.setAccessibilityHelp(nil)
         }
     }
 
@@ -120,12 +144,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let text = RecordingClock.format(elapsed: Date().timeIntervalSince(startDate))
         button.attributedTitle = NSAttributedString(
             string: " " + text,
-            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)])
+            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)])
         button.setAccessibilityLabel(String(localized: "Recording Screencast, \(text)"))
     }
 
     /// While recording: click stops the Screencast; right-click or ⌃-click opens the menu instead.
     @objc private func statusButtonClicked() {
+        guard case .recording = indicatorState else { return }
         let event = NSApp.currentEvent
         let wantsMenu = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
         guard wantsMenu, let item = statusItem, let menu else {
@@ -135,7 +160,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         // Borrow the standard menu for one tracking session.
         item.menu = menu
         item.button?.performClick(nil)
-        if recordingStartDate != nil { item.menu = nil }
+        if indicatorState != .idle { item.menu = nil }
     }
 
     func remove() {
@@ -155,48 +180,68 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func rebuildMenu(_ menu: NSMenu) {
         menu.removeAllItems()
-        let recording = recordingStartDate != nil
-        if recording {
-            menu.addItem(captureItem(.screencast, selector: #selector(stopScreencast),
-                                     title: String(localized: "Stop Screencast")))
+        let active = indicatorState != .idle
+        if active {
+            let stopItem = captureItem(.screencast, selector: #selector(stopScreencast),
+                                       title: String(localized: "Stop Screencast"), symbol: "stop.circle")
+            if case .stopping = indicatorState { stopItem.isEnabled = false }
+            menu.addItem(stopItem)
             menu.addItem(.separator())
         }
-        let takeScreenshot = captureItem(.openScreenshotUI, selector: #selector(takeScreenshot))
+        let takeScreenshot = captureItem(.openScreenshotUI, selector: #selector(takeScreenshot),
+                                         symbol: "camera.viewfinder")
         // The Screenshot UI can't open during a recording.
-        takeScreenshot.isEnabled = !recording
+        takeScreenshot.isEnabled = !active
         menu.addItem(takeScreenshot)
-        menu.addItem(captureItem(.instantScreen, selector: #selector(captureScreen)))
-        menu.addItem(captureItem(.instantWindow, selector: #selector(captureWindow)))
-        if !recording {
-            menu.addItem(captureItem(.screencast, selector: #selector(recordScreencast)))
+        menu.addItem(captureItem(.instantScreen, selector: #selector(captureScreen), symbol: "display"))
+        menu.addItem(captureItem(.instantWindow, selector: #selector(captureWindow), symbol: "macwindow"))
+        if !active {
+            menu.addItem(captureItem(.screencast, selector: #selector(recordScreencast), symbol: "record.circle"))
         }
         menu.addItem(.separator())
-        menu.addItem(item(String(localized: "Open Save Folder"), #selector(openSaveFolder)))
-        menu.addItem(item(String(localized: "Settings…"), #selector(openSettings), key: ",", modifiers: [.command]))
-        let updates = item(String(localized: "Check for Updates…"), #selector(checkForUpdates))
+        menu.addItem(item(String(localized: "Open Save Folder"), #selector(openSaveFolder), symbol: "folder"))
+        menu.addItem(item(String(localized: "Settings…"), #selector(openSettings),
+                          key: ",", modifiers: [.command], symbol: "gearshape"))
+        let updates = item(String(localized: "Check for Updates…"), #selector(checkForUpdates),
+                           symbol: "arrow.triangle.2.circlepath")
         updates.isEnabled = canCheckForUpdates
         menu.addItem(updates)
         menu.addItem(.separator())
-        menu.addItem(item(String(localized: "Quit PrtSc"), #selector(quit), key: "q", modifiers: [.command]))
+        menu.addItem(item(String(localized: "Quit PrtSc"), #selector(quit),
+                          key: "q", modifiers: [.command], symbol: "power"))
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "",
-                      modifiers: NSEvent.ModifierFlags = []) -> NSMenuItem {
+                      modifiers: NSEvent.ModifierFlags = [], symbol: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.keyEquivalentModifierMask = modifiers
         item.target = self
         item.isEnabled = true
+        if let symbol {
+            item.image = menuSymbol(symbol)
+        }
         return item
     }
 
+    private func menuSymbol(_ name: String) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+            .applying(NSImage.SymbolConfiguration.preferringMonochrome())
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        return image
+    }
+
     /// A capture item with its current shortcut as a key equivalent, or as plain text when the menu can't express it.
-    private func captureItem(_ action: HotkeyAction, selector: Selector, title: String? = nil) -> NSMenuItem {
+    private func captureItem(_ action: HotkeyAction, selector: Selector,
+                             title: String? = nil, symbol: String) -> NSMenuItem {
         let title = title ?? action.title
         let combo = settings.hotkeys.bindings[action]
         if let combo, let key = KeyCodes.menuKeyEquivalent(for: combo.keyCode) {
-            return item(title, selector, key: key, modifiers: KeyCodes.menuModifierMask(combo.modifiers))
+            return item(title, selector, key: key,
+                        modifiers: KeyCodes.menuModifierMask(combo.modifiers), symbol: symbol)
         }
-        return item(combo.map { "\(title)  \($0.displayString)" } ?? title, selector)
+        return item(combo.map { "\(title)  \($0.displayString)" } ?? title, selector, symbol: symbol)
     }
 
     @objc private func takeScreenshot() { onTakeScreenshot?() }

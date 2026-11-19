@@ -8,6 +8,27 @@ struct WindowCell: Sendable {
     let rect: CGRect
 }
 
+/// Display metadata for a Window Picker cell: app name, window title, and app icon.
+@MainActor
+struct WindowDisplayInfo {
+    let appName: String?
+    let title: String?
+    let icon: NSImage?
+
+    /// Spoken / VoiceOver label ("App, Title").
+    var accessibilityLabel: String {
+        let parts = [appName, title].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? String(localized: "Window") : parts.joined(separator: ", ")
+    }
+
+    /// Compact pill text: window title if present, otherwise app name.
+    var pillTitle: String {
+        if let title, !title.isEmpty { return title }
+        if let appName, !appName.isEmpty { return appName }
+        return String(localized: "Window")
+    }
+}
+
 /// All state of one open Screenshot UI, shared by every overlay panel and the CapturePanel.
 /// AppKit views redraw through `onChange`; SwiftUI observes the model directly.
 @MainActor
@@ -25,10 +46,16 @@ final class ScreenshotUIModel {
     private(set) var editor: SelectionEditor
     private(set) var selectedDisplayID: UInt32
     private(set) var selectedWindowID: UInt32?
+    /// The Window Picker cell currently under the pointer, or nil.
+    @ObservationIgnored private(set) var hoveredWindowID: UInt32?
+    /// The Selection handle currently being hovered or dragged.
+    @ObservationIgnored private(set) var activeSelectionHandle: SelectionHandle = .none
     /// The hover tooltip for a Capture Panel control (name + keyboard shortcut), or nil.
     private(set) var tooltip: PanelTooltip?
     /// The Capture Panel and close button frames in global CG points, shared by all overlays.
     @ObservationIgnored private(set) var chromeFrames: [CGRect] = []
+    /// Cached per-PID app name and icon for Window Picker labels and pills.
+    @ObservationIgnored private var appMetadataCache: [Int32: (name: String?, icon: NSImage?)] = [:]
 
     @ObservationIgnored private let session: SessionState
     @ObservationIgnored var onChange: (() -> Void)?
@@ -77,6 +104,8 @@ final class ScreenshotUIModel {
         if newMode == .window && !windowModeAvailable { return }
         guard newMode != mode else { return }
         mode = newMode
+        hoveredWindowID = nil
+        activeSelectionHandle = .none
         session.lastCaptureMode = newMode
         announce(newMode.announcement)
         if newMode == .selection { announceSelectionSize() }
@@ -100,30 +129,65 @@ final class ScreenshotUIModel {
 
     // MARK: Screen and Window choice
 
-    func selectDisplay(_ displayID: UInt32) {
-        guard displayID != selectedDisplayID,
-              let index = displays.firstIndex(where: { $0.displayID == displayID }) else { return }
-        selectedDisplayID = displayID
+    func displayName(for displayID: UInt32) -> String {
         let screen = NSScreen.screens.first {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
         }
         if let name = screen?.localizedName, !name.isEmpty {
-            announce(name)
-        } else {
-            announce(String(localized: "Display \(index + 1)"))
+            return name
         }
+        let index = displays.firstIndex(where: { $0.displayID == displayID }) ?? 0
+        return String(localized: "Display \(index + 1)")
+    }
+
+    func selectDisplay(_ displayID: UInt32) {
+        guard displayID != selectedDisplayID,
+              displays.contains(where: { $0.displayID == displayID }) else { return }
+        selectedDisplayID = displayID
+        announce(displayName(for: displayID))
         notify()
     }
 
+    func windowCell(at point: CGPoint) -> WindowCell? {
+        windowCells.values.joined().first { $0.rect.contains(point) }
+    }
+
     func selectWindow(at point: CGPoint) {
-        for cell in windowCells.values.joined() where cell.rect.contains(point) {
-            if selectedWindowID != cell.windowID {
-                selectedWindowID = cell.windowID
-                announceSelectedWindow()
-                notify()
-            }
-            return
+        guard let cell = windowCell(at: point) else { return }
+        selectWindow(id: cell.windowID)
+    }
+
+    func selectWindow(id: UInt32) {
+        guard selectedWindowID != id, snapshot(forWindow: id) != nil else { return }
+        selectedWindowID = id
+        announceSelectedWindow()
+        notify()
+    }
+
+    func setHoveredWindowID(_ id: UInt32?) {
+        guard hoveredWindowID != id else { return }
+        hoveredWindowID = id
+        notify()
+    }
+
+    func setActiveSelectionHandle(_ handle: SelectionHandle) {
+        guard activeSelectionHandle != handle else { return }
+        activeSelectionHandle = handle
+        notify()
+    }
+
+    func windowDisplayInfo(for windowID: UInt32) -> WindowDisplayInfo? {
+        guard let info = snapshot(forWindow: windowID)?.info else { return nil }
+        let cached: (name: String?, icon: NSImage?)
+        if let existing = appMetadataCache[info.ownerPID] {
+            cached = existing
+        } else {
+            let app = NSRunningApplication(processIdentifier: info.ownerPID)
+            let created = (name: app?.localizedName, icon: app?.icon)
+            appMetadataCache[info.ownerPID] = created
+            cached = created
         }
+        return WindowDisplayInfo(appName: cached.name, title: info.title, icon: cached.icon)
     }
 
     func cells(on display: DisplayInfo) -> [WindowCell] {
@@ -348,10 +412,8 @@ final class ScreenshotUIModel {
     }
 
     private func announceSelectedWindow() {
-        guard let id = selectedWindowID, let info = snapshot(forWindow: id)?.info else { return }
-        let app = NSRunningApplication(processIdentifier: info.ownerPID)?.localizedName
-        let title = [app, info.title].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        if !title.isEmpty { announce(title) }
+        guard let id = selectedWindowID, let info = windowDisplayInfo(for: id) else { return }
+        announce(info.accessibilityLabel)
     }
 
     private func announce(_ message: String) {

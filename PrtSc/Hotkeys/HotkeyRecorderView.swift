@@ -11,44 +11,66 @@ struct HotkeyRecorderView: View {
     @Binding var combo: KeyCombo?
     let session: HotkeyRecordingSession
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+
     private var isRecording: Bool { session.activeAction == action }
 
     var body: some View {
         let canClear = combo != nil && !isRecording
-        HStack(spacing: 6) {
-            Button {
-                if isRecording {
-                    session.cancel()
-                } else {
-                    session.start(for: action) { newCombo in
-                        combo = newCombo
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 6) {
+                Button {
+                    if isRecording {
+                        session.cancel()
+                    } else {
+                        session.start(for: action) { newCombo in
+                            combo = newCombo
+                        }
+                    }
+                } label: {
+                    Text(label)
+                        .monospacedDigit()
+                        .frame(minWidth: 110)
+                }
+                .buttonStyle(.bordered)
+                .tint(isRecording ? .accentColor : nil)
+                .overlay {
+                    if isRecording {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(Color.accentColor, lineWidth: contrast == .increased ? 2.5 : 2)
+                            .padding(-2)
+                            .allowsHitTesting(false)
                     }
                 }
-            } label: {
-                Text(label)
-                    .monospacedDigit()
-                    .frame(minWidth: 110)
-            }
-            .buttonStyle(.bordered)
-            .tint(isRecording ? .accentColor : nil)
-            .accessibilityLabel(Text("Shortcut for \(action.settingsTitle)"))
-            .accessibilityValue(isRecording ? Text("Recording shortcut") : Text(label))
-            .accessibilityHint(Text("Click, then press the new shortcut"))
+                .accessibilityLabel(Text("Shortcut for \(action.settingsTitle)"))
+                .accessibilityValue(isRecording ? Text("Recording shortcut") : Text(label))
+                .accessibilityHint(Text("Click, then press the new shortcut"))
 
-            Button {
-                combo = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
+                Button {
+                    combo = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(Text("Clear shortcut for \(action.settingsTitle)"))
+                .help(Text("Clear shortcut"))
+                .disabled(!canClear)
+                .allowsHitTesting(canClear)
+                .accessibilityHidden(!canClear)
+                .opacity(canClear ? 1 : 0)
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel(Text("Clear shortcut for \(action.settingsTitle)"))
-            .help(Text("Clear shortcut"))
-            .disabled(!canClear)
-            .allowsHitTesting(canClear)
-            .accessibilityHidden(!canClear)
-            .opacity(canClear ? 1 : 0)
+
+            if isRecording {
+                Text("Press Esc to cancel, Delete to clear")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRecording)
         .onDisappear {
             if isRecording { session.cancel() }
         }

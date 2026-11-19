@@ -20,8 +20,12 @@ final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     func show() {
         settings.hasSeenWelcome = true
         if window == nil {
-            let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: .zero,
+                                  styleMask: [.titled, .closable, .fullSizeContentView],
+                                  backing: .buffered, defer: false)
             window.title = String(localized: "Welcome to PrtSc")
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
             window.delegate = self
             self.window = window

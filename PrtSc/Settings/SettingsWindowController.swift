@@ -26,14 +26,20 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     /// Shows the Settings window (SwiftUI SettingsView hosted in an NSWindow).
     func show() {
         if window == nil {
-            let window = NSWindow(contentViewController: NSHostingController(
-                rootView: SettingsView(settings: settings, hotkeyManager: hotkeyManager, recordingSession: recordingSession, updater: updater)))
+            let window = NSWindow(contentRect: .zero,
+                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                  backing: .buffered, defer: false)
             window.title = String(localized: "PrtSc Settings")
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
+            window.contentViewController = NSHostingController(
+                rootView: SettingsView(settings: settings,
+                                       hotkeyManager: hotkeyManager,
+                                       recordingSession: recordingSession,
+                                       updater: updater,
+                                       hostWindow: { [weak window] in window }))
             let visible = NSScreen.main?.visibleFrame.height ?? 800
-            window.setContentSize(NSSize(width: 540, height: min(720, visible - 80)))
+            window.setContentSize(NSSize(width: 540, height: min(520, visible - 80)))
             window.center()
             self.window = window
         }

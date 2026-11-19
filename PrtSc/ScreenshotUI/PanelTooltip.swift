@@ -79,27 +79,54 @@ private struct PanelTooltipModifier: ViewModifier {
     }
 }
 
-/// The tooltip bubble: name, then the shortcut as a key cap.
+/// The tooltip bubble: name, then the shortcut as a bordered monospaced keycap.
 struct PanelTooltipView: View {
     let model: ScreenshotUIModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var isVisible = false
 
     var body: some View {
         if let tooltip = model.tooltip {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Text(tooltip.title)
-                    .font(.callout.weight(.medium))
+                    .font(.caption.weight(.medium))
                 Text(tooltip.shortcut)
-                    .font(.callout.monospaced().weight(.semibold))
-                    .padding(.horizontal, 6)
+                    .font(.caption.monospaced().weight(.medium))
+                    .padding(.horizontal, 5)
                     .padding(.vertical, 1)
-                    .background(Color.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                    .background(
+                        Color.primary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(
+                                Color.primary.opacity(contrast == .increased ? 0.55 : 0.22),
+                                lineWidth: 1
+                            )
+                    }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
             .fixedSize()
-            .tooltipBackground(reduceTransparency: reduceTransparency)
+            .tooltipBackground(reduceTransparency: reduceTransparency, increasedContrast: contrast == .increased)
             .padding(4)
+            .opacity(isVisible || reduceMotion ? 1 : 0)
+            .onAppear {
+                if reduceMotion {
+                    isVisible = true
+                } else {
+                    isVisible = false
+                    withAnimation(.easeOut(duration: 0.14)) {
+                        isVisible = true
+                    }
+                }
+            }
+            .onDisappear {
+                isVisible = false
+            }
             .accessibilityHidden(true) // the controls already carry labels
         }
     }
@@ -107,13 +134,21 @@ struct PanelTooltipView: View {
 
 extension View {
     @ViewBuilder
-    fileprivate func tooltipBackground(reduceTransparency: Bool) -> some View {
+    fileprivate func tooltipBackground(reduceTransparency: Bool, increasedContrast: Bool) -> some View {
         if reduceTransparency {
             self
                 .background(Color(nsColor: .windowBackgroundColor), in: .capsule)
-                .overlay { Capsule().stroke(Color.primary.opacity(0.25), lineWidth: 1) }
+                .overlay {
+                    Capsule().stroke(Color.primary.opacity(increasedContrast ? 0.6 : 0.25), lineWidth: 1)
+                }
         } else {
-            self.glassEffect(.regular, in: .capsule)
+            self
+                .glassEffect(.regular, in: .capsule)
+                .overlay {
+                    if increasedContrast {
+                        Capsule().stroke(Color.primary.opacity(0.45), lineWidth: 1)
+                    }
+                }
         }
     }
 }

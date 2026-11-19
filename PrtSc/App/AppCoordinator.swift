@@ -85,8 +85,9 @@ final class AppCoordinator {
         observeForever { [weak self] in
             guard let self else { return }
             switch self.screencastRecorder.state {
-            case let .recording(startDate): self.menuBar.setRecording(startDate: startDate)
-            case .idle, .starting, .stopping: self.menuBar.setRecording(startDate: nil)
+            case let .recording(startDate): self.menuBar.setIndicatorState(.recording(startDate: startDate))
+            case .stopping: self.menuBar.setIndicatorState(.stopping)
+            case .idle, .starting: self.menuBar.setIndicatorState(.idle)
             }
         }
 

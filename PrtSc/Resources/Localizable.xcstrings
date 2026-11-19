@@ -1,6 +1,18 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ · %lld × %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %lld × %lld"
+          }
+        }
+      },
+      "comment": "Selected display badge: display name and pixel dimensions"
+    },
     "%lld by %lld": {
       "extractionState": "manual",
       "localizations": {
@@ -145,6 +157,17 @@
         }
       }
     },
+    "Capture or start recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture or start recording"
+          }
+        }
+      }
+    },
     "Captures the display under the pointer immediately": {
       "extractionState": "manual",
       "localizations": {
@@ -277,6 +300,17 @@
         }
       }
     },
+    "Close the Screenshot UI": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close the Screenshot UI"
+          }
+        }
+      }
+    },
     "Couldn't Record Screencast": {
       "extractionState": "manual",
       "localizations": {
@@ -365,6 +399,17 @@
         }
       }
     },
+    "Draw a new Selection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draw a new Selection"
+          }
+        }
+      }
+    },
     "Every screenshot is also copied to the clipboard.": {
       "extractionState": "manual",
       "localizations": {
@@ -376,13 +421,24 @@
         }
       }
     },
-    "Folder": {
+    "Fine 1 pt step": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Folder"
+            "value": "Fine 1 pt step"
+          }
+        }
+      }
+    },
+    "Full-screen step": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full-screen step"
           }
         }
       }
@@ -460,6 +516,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Most compatible format (H.264)"
+          }
+        }
+      }
+    },
+    "Move Selection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Selection"
           }
         }
       }
@@ -607,13 +674,13 @@
         }
       }
     },
-    "Press %@ to take a screenshot.": {
+    "Press Esc to cancel, Delete to clear": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press %@ to take a screenshot."
+            "value": "Press Esc to cancel, Delete to clear"
           }
         }
       }
@@ -805,6 +872,17 @@
         }
       }
     },
+    "Reset Selection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Selection"
+          }
+        }
+      }
+    },
     "Reset to Default": {
       "extractionState": "manual",
       "localizations": {
@@ -827,13 +905,24 @@
         }
       }
     },
-    "Reveal": {
+    "Resize Selection or move focus": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reveal"
+            "value": "Resize Selection or move focus"
+          }
+        }
+      }
+    },
+    "Right-drag": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right-drag"
           }
         }
       }
@@ -904,6 +993,17 @@
         }
       }
     },
+    "Screencast Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screencast Folder"
+          }
+        }
+      }
+    },
     "Screencast Recorded": {
       "extractionState": "manual",
       "localizations": {
@@ -970,6 +1070,17 @@
         }
       }
     },
+    "Screenshot UI Keys": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot UI Keys"
+          }
+        }
+      }
+    },
     "Screenshot area": {
       "extractionState": "manual",
       "localizations": {
@@ -988,6 +1099,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Screenshot mode"
+          }
+        }
+      }
+    },
+    "Screenshots": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
           }
         }
       }
@@ -1124,6 +1246,17 @@
         }
       }
     },
+    "Space": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Space"
+          }
+        }
+      }
+    },
     "Stop Screencast": {
       "extractionState": "manual",
       "localizations": {
@@ -1131,6 +1264,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stop Screencast"
+          }
+        }
+      }
+    },
+    "Stopping Screencast": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping Screencast"
+          }
+        }
+      }
+    },
+    "Stopping…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping…"
+          }
+        }
+      }
+    },
+    "Switch Capture Mode (Selection, Screen, Window)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch Capture Mode (Selection, Screen, Window)"
+          }
+        }
+      }
+    },
+    "Switch Capture Type (Screenshot, Screencast)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch Capture Type (Screenshot, Screencast)"
           }
         }
       }
@@ -1300,6 +1477,17 @@
         }
       }
     },
+    "Toggle Show Pointer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Show Pointer"
+          }
+        }
+      }
+    },
     "Type shortcut…": {
       "extractionState": "manual",
       "localizations": {
@@ -1373,6 +1561,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS stopped the recording."
+          }
+        }
+      }
+    },
+    "⌃-drag": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃-drag"
           }
         }
       }
